@@ -1,11 +1,8 @@
 use crate::conds::{
-    to_condition_equal, AndCondition, ConditionEqualWrap, FalseCondition, TrueCondition,
+    AndCondition, ConditionEqualWrap, FalseCondition, TrueCondition, to_condition_equal,
 };
-use crate::{ACDCDim, ACDC, ACDCZX};
-use egg::{
-    Analysis, ConditionalApplier, Language, Pattern
-    , Rewrite, Symbol,
-};
+use crate::{ACDC, ACDCDim, ACDCZX, Hyp};
+use egg::{Analysis, ConditionalApplier, Language, Pattern, Rewrite, Symbol};
 use serde_derive::{Deserialize, Serialize};
 use std::cmp::PartialEq;
 use std::collections::HashSet;
@@ -13,21 +10,26 @@ use std::sync::Arc;
 
 fn find_all_symbols_in_expr_helper(dim: &ACDCDim, discovered_symbols: &mut HashSet<String>) {
     match dim {
-        ACDCDim::Lit(_) => {}
-        ACDCDim::Var(s) => {
+        ACDCDim::Lit { lit: _ } => {}
+        ACDCDim::Symbol { symbol: s } => {
             discovered_symbols.insert(s.clone());
         }
-        ACDCDim::Add(a, b) => {
+        ACDCDim::Add { a, b } => {
             find_all_symbols_in_expr_helper(a, discovered_symbols);
             find_all_symbols_in_expr_helper(b, discovered_symbols);
         }
-        ACDCDim::Mul(a, b) => {
+        ACDCDim::Mul { a, b } => {
             find_all_symbols_in_expr_helper(a, discovered_symbols);
             find_all_symbols_in_expr_helper(b, discovered_symbols);
         }
-        ACDCDim::Sub(a, b) => {
+        ACDCDim::Sub { a, b } => {
             find_all_symbols_in_expr_helper(a, discovered_symbols);
             find_all_symbols_in_expr_helper(b, discovered_symbols);
+        }
+        ACDCDim::Fn { fn_name: _, args } => {
+            for arg in args {
+                find_all_symbols_in_expr_helper(arg, discovered_symbols);
+            }
         }
     }
 }
@@ -59,11 +61,12 @@ struct ACDCDimConstraint<'a> {
 
 fn to_acdc_expr(dim: &ACDCDim) -> String {
     match dim {
-        ACDCDim::Lit(n) => n.to_string(),
-        ACDCDim::Var(s) => s.to_string(),
-        ACDCDim::Add(a, b) => format!("(+ {} {})", to_acdc_expr(a), to_acdc_expr(b)),
-        ACDCDim::Mul(a, b) => format!("(* {} {})", to_acdc_expr(a), to_acdc_expr(b)),
-        ACDCDim::Sub(a, b) => format!("(- {} {})", to_acdc_expr(a), to_acdc_expr(b)),
+        ACDCDim::Lit { lit } => lit.to_string(),
+        ACDCDim::Symbol { symbol: s } => s.to_string(),
+        ACDCDim::Add { a, b } => format!("(+ {} {})", to_acdc_expr(a), to_acdc_expr(b)),
+        ACDCDim::Mul { a, b } => format!("(* {} {})", to_acdc_expr(a), to_acdc_expr(b)),
+        ACDCDim::Sub { a, b } => format!("(- {} {})", to_acdc_expr(a), to_acdc_expr(b)),
+        ACDCDim::Fn { fn_name, args } => unimplemented!("Can't serialize fn, yet"),
     }
 }
 
@@ -77,11 +80,12 @@ fn to_acdc_exprs_with_placeholders(constr: &ACDCDimConstraint) -> (String, Strin
 
 fn contains_symbol(dim: &ACDCDim, s: &String) -> bool {
     match dim {
-        ACDCDim::Lit(_) => false,
-        ACDCDim::Var(sym) => sym == s,
-        ACDCDim::Add(a, b) => contains_symbol(a, s) || contains_symbol(b, s),
-        ACDCDim::Mul(a, b) => contains_symbol(a, s) || contains_symbol(b, s),
-        ACDCDim::Sub(a, b) => contains_symbol(a, s) || contains_symbol(b, s),
+        ACDCDim::Lit { lit: _ } => false,
+        ACDCDim::Symbol { symbol } => symbol == s,
+        ACDCDim::Add { a, b } => contains_symbol(a, s) || contains_symbol(b, s),
+        ACDCDim::Mul { a, b } => contains_symbol(a, s) || contains_symbol(b, s),
+        ACDCDim::Sub { a, b } => contains_symbol(a, s) || contains_symbol(b, s),
+        ACDCDim::Fn { fn_name: _, args } => args.iter().any(|a| contains_symbol(a, s)),
     }
 }
 
@@ -92,9 +96,10 @@ fn invert(dim: &ACDCDim, s: &Symbol) -> ACDCDim {
 
 fn contains_sub(dim: &ACDCDim) -> bool {
     match dim {
-        ACDCDim::Add(a, b) => contains_sub(a) || contains_sub(b),
-        ACDCDim::Mul(a, b) => contains_sub(a) || contains_sub(b),
-        ACDCDim::Sub(a, b) => true,
+        ACDCDim::Add { a, b } => contains_sub(a) || contains_sub(b),
+        ACDCDim::Mul { a, b } => contains_sub(a) || contains_sub(b),
+        ACDCDim::Fn { fn_name: _, args } => args.iter().any(|a| contains_sub(a)),
+        ACDCDim::Sub { a, b } => true,
         _ => false,
     }
 }
@@ -134,7 +139,11 @@ fn gen_common_var_constraint<'a>(
                     pos: r_idx,
                 },
             ],
-            unsat: !(&l_dim == &r_dim && &l_dim == &ACDCDim::Var(common_var.clone())), // Right now only allow when both are the same variable not in exprs
+            unsat: !(&l_dim == &r_dim
+                && &l_dim
+                    == &ACDCDim::Symbol {
+                        symbol: common_var.clone(),
+                    }), // Right now only allow when both are the same variable not in exprs
         });
     }
     ret
@@ -235,38 +244,52 @@ impl<'a> ZXParam<'a> {
     pub fn new(n: ACDCDim, m: ACDCDim, name: &'a str) -> Self {
         ZXParam { n, m, name }
     }
+    pub fn from_dep_hyp(h: Hyp) -> Self {
+        match h {
+            Hyp::DepHyp { name, n, m } => ZXParam {
+                n: n.clone(),
+                m: m.clone(),
+                name: name.as_str(),
+            },
+            _ => panic!("Only dep hyp supported"),
+        }
+    }
 }
 
 fn acdczx_to_pattern(zx: &ACDCZX) -> String {
     match zx {
-        ACDCZX::Var(s) => format!("?{}", s),
-        ACDCZX::Cast(n, m, zx) => format!(
+        ACDCZX::Val { val: s, n: _, m: _ } => format!("?{}", s),
+        ACDCZX::Cast { n, m, zx } => format!(
             "(cast {} {} {})",
             to_acdc_expr(n),
             to_acdc_expr(m),
             acdczx_to_pattern(zx)
         ),
-        ACDCZX::Compose(l, r) => format!(
+        ACDCZX::Compose { a, b } => format!(
             "(compose {} {})",
-            acdczx_to_pattern(l),
-            acdczx_to_pattern(r)
+            acdczx_to_pattern(a),
+            acdczx_to_pattern(b)
         ),
-        ACDCZX::NWire(n) => format!("(n_wire {})", to_acdc_expr(n)),
-        ACDCZX::Stack(l, r) => format!("(stack {} {})", acdczx_to_pattern(l), acdczx_to_pattern(r)),
-        ACDCZX::Val(n, m, s) => format!("(val {} {} {})", to_acdc_expr(n), to_acdc_expr(m), s),
-        ACDCZX::X(n, m, a) => format!(
+        ACDCZX::NWire { n } => format!("(n_wire {})", to_acdc_expr(n)),
+        ACDCZX::Stack { a, b } => {
+            format!("(stack {} {})", acdczx_to_pattern(a), acdczx_to_pattern(b))
+        }
+        ACDCZX::X { n, m, alpha: a } => format!(
             "(X {} {} {})",
             to_acdc_expr(n),
             to_acdc_expr(m),
             to_acdc_expr(a)
         ),
-        ACDCZX::Z(n, m, a) => format!(
+        ACDCZX::Z { n, m, alpha: a } => format!(
             "(Z {} {} {})",
             to_acdc_expr(n),
             to_acdc_expr(m),
             to_acdc_expr(a)
         ),
-        ACDCZX::Fn(_, _) => unimplemented!("Functions on ZX diagrams not yet supported"),
+        ACDCZX::Fn {
+            fn_name: _,
+            args: _,
+        } => unimplemented!("Functions on ZX diagrams not yet supported"),
     }
 }
 
