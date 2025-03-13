@@ -2,11 +2,11 @@ mod conditioneqwrapper;
 mod conds;
 mod vyzxlemma;
 
-use crate::vyzxlemma::{generate_rw, ZXParam};
+use crate::vyzxlemma::{ZXParam, generate_rw};
 use egg::*;
-use serde::ser::SerializeStruct;
 use serde::Serialize as Ser;
 use serde::Serializer;
+use serde::ser::SerializeStruct;
 use serde_derive::{Deserialize, Serialize};
 use std::cmp::max;
 
@@ -72,15 +72,16 @@ impl<'a, A: Analysis<ACDC> + 'static> ToSer<'a, SerADCDWrap<'a, A>, ACDC, A> for
         SerADCDWrap(self.clone(), egraph)
     }
 }
-impl <'a, A : Analysis<ACDC>> Ser for SerADCDWrap<'a, A> {
-
-
+impl<'a, A: Analysis<ACDC>> Ser for SerADCDWrap<'a, A> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         #[inline(always)]
-        fn id_to_ser_acdc_warp<A: Analysis<ACDC>>(egraph: &egg::EGraph<ACDC, A>, id : Id) -> SerADCDWrap<A> {
+        fn id_to_ser_acdc_warp<A: Analysis<ACDC>>(
+            egraph: &egg::EGraph<ACDC, A>,
+            id: Id,
+        ) -> SerADCDWrap<A> {
             egraph.id_to_node(id).to_ser(egraph)
         }
         let mut state: <S as Serializer>::SerializeStruct;
@@ -169,7 +170,7 @@ impl <'a, A : Analysis<ACDC>> Ser for SerADCDWrap<'a, A> {
                 state.serialize_field("n", &id_to_ser_acdc_warp(self.1, *id))?;
             }
             ACDC::Fn(fn_name, ids) => {
-                let args : Vec<SerADCDWrap<'a, A>> = ids
+                let args: Vec<SerADCDWrap<'a, A>> = ids
                     .iter()
                     .map(|id| id_to_ser_acdc_warp(self.1, *id))
                     .collect();
@@ -206,8 +207,7 @@ impl<'a, L: Language + 'static, A: Analysis<L>> SerFlatTermWrap<'a, L, A> {
 
 // impl<L: Language + 'static + ToSer<T, L, A>, A: Analysis<L>, T: Ser> Ser
 //     for SerFlatTermWrap<L, A> - Weird rust typing reasons make this not work
-impl<'a, A: Analysis<ACDC>> Ser for SerFlatTermWrap<'a, ACDC, A>
-{
+impl<'a, A: Analysis<ACDC>> Ser for SerFlatTermWrap<'a, ACDC, A> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,

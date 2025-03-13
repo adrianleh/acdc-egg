@@ -108,7 +108,9 @@ impl<L: FromOp> ConditionEqualWrap<L> {
     }
 }
 
-pub fn any<L, N>(conds: Vec<Arc<dyn Condition<L, N>  + Send + Sync>>) -> Arc<dyn Condition<L, N> + Send + Sync>
+pub fn any<L, N>(
+    conds: Vec<Arc<dyn Condition<L, N> + Send + Sync>>,
+) -> Arc<dyn Condition<L, N> + Send + Sync>
 where
     L: Language + 'static,
     N: Analysis<L> + 'static,
@@ -120,7 +122,9 @@ where
         })
 }
 
-pub fn all<L, N>(conds: Vec<Arc<dyn Condition<L, N> + Send + Sync>>) -> Arc<dyn Condition<L, N> + Send + Sync>
+pub fn all<L, N>(
+    conds: Vec<Arc<dyn Condition<L, N> + Send + Sync>>,
+) -> Arc<dyn Condition<L, N> + Send + Sync>
 where
     L: Language + 'static,
     N: Analysis<L> + 'static,

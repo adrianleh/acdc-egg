@@ -149,10 +149,7 @@ fn gen_common_var_constraint(
     ret
 }
 
-fn gen_common_var_constraints(
-    zxparam1: &ZXParam,
-    zxparam2: &ZXParam,
-) -> Vec<ACDCDimConstraint> {
+fn gen_common_var_constraints(zxparam1: &ZXParam, zxparam2: &ZXParam) -> Vec<ACDCDimConstraint> {
     let dim_pairs = get_all_dim_pairs(zxparam1, zxparam2);
     let mut constraints = Vec::new();
     for (l, r) in dim_pairs {
@@ -200,7 +197,11 @@ fn get_all_conditions(params: Vec<ZXParam>) -> Vec<Constr> {
     for (zxparam1, zxparam2) in all_combs {
         let constraints = gen_common_var_constraints(&zxparam1, &zxparam2);
         for constr in constraints {
-            let cond = dim_constr_to_cond_eq(zxparam1.name.as_str(), zxparam2.name.as_str(), &constr.clone());
+            let cond = dim_constr_to_cond_eq(
+                zxparam1.name.as_str(),
+                zxparam2.name.as_str(),
+                &constr.clone(),
+            );
             ret.push(cond);
         }
     }
@@ -242,17 +243,19 @@ pub struct ZXParam {
 }
 impl ZXParam {
     pub fn new(n: ACDCDim, m: ACDCDim, name: &str) -> Self {
-        ZXParam { n, m, name: name.to_string() }
+        ZXParam {
+            n,
+            m,
+            name: name.to_string(),
+        }
     }
     pub fn from_dep_hyp(h: Hyp) -> Self {
         match h {
-            Hyp::DepHyp { name, n, m } => {
-                ZXParam {
-                    n: n.clone(),
-                    m: m.clone(),
-                    name: name.clone(),
-                }
-            }
+            Hyp::DepHyp { name, n, m } => ZXParam {
+                n: n.clone(),
+                m: m.clone(),
+                name: name.clone(),
+            },
             _ => panic!("Only dep hyp supported"),
         }
     }
