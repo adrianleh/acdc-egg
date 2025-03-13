@@ -44,18 +44,18 @@ fn common_vars(a: &ACDCDim, b: &ACDCDim) -> HashSet<String> {
     a_vars.intersection(&b_vars).cloned().collect()
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct ACDCDimConstraintParam<'a> {
-    param: ZXParam<'a>,
+struct ACDCDimConstraintParam {
+    param: ZXParam,
     pos: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct ACDCDimConstraint<'a> {
+struct ACDCDimConstraint {
     s: Symbol,
 
     l: ACDCDim,
     r: ACDCDim,
-    pos: [ACDCDimConstraintParam<'a>; 2], // Position of the dep type constraints, in = 0, out =1
+    pos: [ACDCDimConstraintParam; 2], // Position of the dep type constraints, in = 0, out =1
     unsat: bool,
 }
 
@@ -108,12 +108,12 @@ fn contains_sub(dim: &ACDCDim) -> bool {
 // then it isolates the common variables and checks if that isolation is unsatisfiable
 // The latter occurs, when a function, such as sub, doesn't have an inverse
 // To solve this we would need much bigger reasoning machinery
-fn gen_common_var_constraint<'a>(
+fn gen_common_var_constraint(
     l: (ACDCDim, u32),
     r: (ACDCDim, u32),
-    lp: &'a ZXParam<'a>,
-    rp: &'a ZXParam<'a>,
-) -> Vec<ACDCDimConstraint<'a>> {
+    lp: &ZXParam,
+    rp: &ZXParam,
+) -> Vec<ACDCDimConstraint> {
     let l_dim = l.0;
     let r_dim = r.0;
     let l_idx = l.1;
@@ -149,10 +149,10 @@ fn gen_common_var_constraint<'a>(
     ret
 }
 
-fn gen_common_var_constraints<'a>(
-    zxparam1: &'a ZXParam<'a>,
-    zxparam2: &'a ZXParam<'a>,
-) -> Vec<ACDCDimConstraint<'a>> {
+fn gen_common_var_constraints(
+    zxparam1: &ZXParam,
+    zxparam2: &ZXParam,
+) -> Vec<ACDCDimConstraint> {
     let dim_pairs = get_all_dim_pairs(zxparam1, zxparam2);
     let mut constraints = Vec::new();
     for (l, r) in dim_pairs {
@@ -200,7 +200,7 @@ fn get_all_conditions(params: Vec<ZXParam>) -> Vec<Constr> {
     for (zxparam1, zxparam2) in all_combs {
         let constraints = gen_common_var_constraints(&zxparam1, &zxparam2);
         for constr in constraints {
-            let cond = dim_constr_to_cond_eq(zxparam1.name, zxparam2.name, &constr.clone());
+            let cond = dim_constr_to_cond_eq(zxparam1.name.as_str(), zxparam2.name.as_str(), &constr.clone());
             ret.push(cond);
         }
     }
@@ -222,8 +222,8 @@ fn dim_constr_to_cond_eq(l_name: &str, r_name: &str, constr: &ACDCDimConstraint)
     }
     let exprs = to_acdc_exprs_with_placeholders(constr);
 
-    let dep_arg_l = dep_type_str(constr.pos[0].pos + 1, constr.pos[0].param.name);
-    let dep_arg_r = dep_type_str(constr.pos[1].pos + 1, constr.pos[1].param.name);
+    let dep_arg_l = dep_type_str(constr.pos[0].pos + 1, constr.pos[0].param.name.as_str());
+    let dep_arg_r = dep_type_str(constr.pos[1].pos + 1, constr.pos[1].param.name.as_str());
     println!("{} - {}", dep_arg_l.as_str(), dep_arg_r.as_str());
 
     let e0 = exprs.0.replace(PLACEHOLDER, dep_arg_l.as_str());
@@ -235,22 +235,24 @@ fn dim_constr_to_cond_eq(l_name: &str, r_name: &str, constr: &ACDCDimConstraint)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ZXParam<'a> {
+pub struct ZXParam {
     n: ACDCDim,
     m: ACDCDim,
-    name: &'a str,
+    name: String,
 }
-impl<'a> ZXParam<'a> {
-    pub fn new(n: ACDCDim, m: ACDCDim, name: &'a str) -> Self {
-        ZXParam { n, m, name }
+impl ZXParam {
+    pub fn new(n: ACDCDim, m: ACDCDim, name: &str) -> Self {
+        ZXParam { n, m, name: name.to_string() }
     }
     pub fn from_dep_hyp(h: Hyp) -> Self {
         match h {
-            Hyp::DepHyp { name, n, m } => ZXParam {
-                n: n.clone(),
-                m: m.clone(),
-                name: name.as_str(),
-            },
+            Hyp::DepHyp { name, n, m } => {
+                ZXParam {
+                    n: n.clone(),
+                    m: m.clone(),
+                    name: name.clone(),
+                }
+            }
             _ => panic!("Only dep hyp supported"),
         }
     }
