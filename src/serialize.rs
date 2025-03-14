@@ -47,8 +47,8 @@ macro_rules! serialize_bin_ops {
 
 macro_rules! serialize_spider {
     ($state:expr, $self:expr, $ids:expr, $color:expr, $serializer:expr) => {
-        $state = $serializer.serialize_struct("ACDC",5)?;
-        ser_type!("spider",$state);
+        $state = $serializer.serialize_struct("ACDC", 5)?;
+        ser_type!("spider", $state);
         $state.serialize_field("color", $color)?;
         $state.serialize_field("n", &id_to_ser_acdc_warp($self.1, $ids[0]))?;
         $state.serialize_field("m", &id_to_ser_acdc_warp($self.1, $ids[1]))?;
@@ -58,7 +58,7 @@ macro_rules! serialize_spider {
 
 macro_rules! ser_type {
     ($t:expr, $state:expr) => {
-       $state.serialize_field("type", $t)?;
+        $state.serialize_field("type", $t)?;
     };
 }
 
@@ -77,60 +77,60 @@ impl<'a, A: Analysis<ACDC>> Ser for SerADCDWrap<'a, A> {
         let mut state: <S as Serializer>::SerializeStruct;
         match &self.0 {
             ACDC::Lit(lit) => {
-                state = serializer.serialize_struct("ACDC",2)?;
-                ser_type!("const",state);
+                state = serializer.serialize_struct("ACDC", 2)?;
+                ser_type!("const", state);
                 state.serialize_field("lit", &lit)?;
             }
             ACDC::Add(ids) => {
-                state = serializer.serialize_struct("ACDC",3)?;
-                ser_type!("+",state);
+                state = serializer.serialize_struct("ACDC", 3)?;
+                ser_type!("+", state);
                 serialize_bin_ops!(state, self, ids);
             }
             ACDC::Sub(ids) => {
-                state = serializer.serialize_struct("ACDC",3)?;
-                ser_type!("-",state);
+                state = serializer.serialize_struct("ACDC", 3)?;
+                ser_type!("-", state);
                 serialize_bin_ops!(state, self, ids);
             }
             ACDC::Mul(ids) => {
-                state = serializer.serialize_struct("ACDC",3)?;
-                ser_type!("*",state);
+                state = serializer.serialize_struct("ACDC", 3)?;
+                ser_type!("*", state);
                 serialize_bin_ops!(state, self, ids);
             }
             ACDC::Dep1(id) => {
-                state = serializer.serialize_struct("ACDC",2)?;
-                ser_type!("dep1",state);
+                state = serializer.serialize_struct("ACDC", 2)?;
+                ser_type!("dep1", state);
                 state.serialize_field("of", &id_to_ser_acdc_warp(self.1, *id))?;
             }
             ACDC::Dep2(id) => {
-                state = serializer.serialize_struct("ACDC",2)?;
-                ser_type!("dep2",state);
+                state = serializer.serialize_struct("ACDC", 2)?;
+                ser_type!("dep2", state);
                 state.serialize_field("of", &id_to_ser_acdc_warp(self.1, *id))?;
             }
             ACDC::Var(s) => {
-                state = serializer.serialize_struct("ACDC",2)?;
-                ser_type!("symbol",state);
+                state = serializer.serialize_struct("ACDC", 2)?;
+                ser_type!("symbol", state);
                 state.serialize_field("symbol", s.as_str())?;
             }
             ACDC::Cast(ids) => {
-                state = serializer.serialize_struct("ACDC",4)?;
-                ser_type!("cast",state);
+                state = serializer.serialize_struct("ACDC", 4)?;
+                ser_type!("cast", state);
                 state.serialize_field("n", &id_to_ser_acdc_warp(self.1, ids[0]))?;
                 state.serialize_field("m", &id_to_ser_acdc_warp(self.1, ids[1]))?;
                 state.serialize_field("zx", &id_to_ser_acdc_warp(self.1, ids[2]))?;
             }
             ACDC::Stack(ids) => {
-                state = serializer.serialize_struct("ACDC",3)?;
-                ser_type!("stack",state);
+                state = serializer.serialize_struct("ACDC", 3)?;
+                ser_type!("stack", state);
                 serialize_bin_ops!(state, self, ids);
             }
             ACDC::Compose(ids) => {
-                state = serializer.serialize_struct("ACDC",3)?;
-                ser_type!("compose",state);
+                state = serializer.serialize_struct("ACDC", 3)?;
+                ser_type!("compose", state);
                 serialize_bin_ops!(state, self, ids);
             }
             ACDC::Val(ids) => {
-                state = serializer.serialize_struct("ACDC",3)?;
-                ser_type!("symbol",state);
+                state = serializer.serialize_struct("ACDC", 3)?;
+                ser_type!("symbol", state);
                 state.serialize_field(
                     "size",
                     &SizedZX {
@@ -147,8 +147,8 @@ impl<'a, A: Analysis<ACDC>> Ser for SerADCDWrap<'a, A> {
                 serialize_spider!(state, self, ids, "x", serializer);
             }
             ACDC::NWire(id) => {
-                state = serializer.serialize_struct("ACDC",2)?;
-                ser_type!("n_wire",state);
+                state = serializer.serialize_struct("ACDC", 2)?;
+                ser_type!("n_wire", state);
                 state.serialize_field("n", &id_to_ser_acdc_warp(self.1, *id))?;
             }
             ACDC::Fn(fn_name, ids) => {
@@ -156,8 +156,8 @@ impl<'a, A: Analysis<ACDC>> Ser for SerADCDWrap<'a, A> {
                     .iter()
                     .map(|id| id_to_ser_acdc_warp(self.1, *id))
                     .collect();
-                state = serializer.serialize_struct("ACDC",3)?;
-                ser_type!("fn",state);
+                state = serializer.serialize_struct("ACDC", 3)?;
+                ser_type!("fn", state);
                 state.serialize_field("fn_name", fn_name.as_str())?;
                 state.serialize_field("args", &args)?;
             }
@@ -185,6 +185,19 @@ impl<'a, L: Language + 'static, A: Analysis<L>> SerFlatTermWrap<'a, L, A> {
             .map(|ft| SerFlatTermWrap::from(ft.clone(), self.1))
             .collect()
     }
+
+    fn contains_proof(&self) -> bool {
+        self.0.forward_rule.is_some()
+            || self.0.backward_rule.is_some()
+            || self.children().iter().any(|child| child.contains_proof())
+    }
+
+    pub fn non_empty_children(&self) -> Vec<SerFlatTermWrap<L, A>> {
+        self.children()
+            .into_iter()
+            .filter(|child| child.contains_proof())
+            .collect::<Vec<_>>()
+    }
 }
 
 // impl<L: Language + 'static + ToSer<T, L, A>, A: Analysis<L>, T: Ser> Ser
@@ -196,11 +209,15 @@ impl<'a, A: Analysis<ACDC>> Ser for SerFlatTermWrap<'a, ACDC, A> {
     {
         let fwd_rule = &self.0.forward_rule.map(|x| x.to_string());
         let bwd_rule = &self.0.backward_rule.map(|x| x.to_string());
+        if !self.contains_proof() {
+            let mut state = serializer.serialize_struct("SerFlatTermWrap", 0)?;
+            return state.end();
+        }
         let mut state = serializer.serialize_struct("SerFlatTermWrap", 4)?;
         state.serialize_field("node", &self.0.node.to_ser(self.1))?;
         state.serialize_field("backward_rule", bwd_rule)?;
         state.serialize_field("forward_rule", fwd_rule)?;
-        state.serialize_field("children", &self.children())?;
+        state.serialize_field("children", &self.non_empty_children())?;
         state.end()
     }
 }

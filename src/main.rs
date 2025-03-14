@@ -13,6 +13,22 @@ use serde_derive::{Deserialize, Serialize};
 use std::cmp::max;
 
 fn main() {
+    println!("{:?}", generate_rw::<ConstantFolding>(
+            "n_wire_l",
+            &ACDCZX::Compose {
+                a: Box::from(ACDCZX::NWire {
+                    n: simple_symbol("n"),
+                }),
+                b: Box::from(simple_var("zx")),
+            },
+            &simple_var("zx"),
+            vec![ZXParam::new(
+                simple_symbol("n"),
+                simple_symbol("m"),
+                "zx",
+            )],
+            false ,
+        ));
     let args: Vec<String> = std::env::args().collect();
     if args.contains(&"--version".to_string()) {
         println!("0.0.1");
@@ -22,45 +38,47 @@ fn main() {
     let val_b = "(val (+ 0 m1) o1 b)";
     let val_c = "(val n2 m2 c)";
     let val_d = "(val m2 o2 d)";
+    let n_wire_c = "(n_wire n2)";
     let expr_str = format!(
         "(stack (compose {} {}) (compose {} {}))",
         val_a, val_b, val_c, val_d
     );
-    let goal = format!(
-        "(compose (stack {} {}) (stack {} {}))",
-        val_a, val_c, val_b, val_d
+    let goal_str = format!(
+        "(compose (stack {} (compose {} {})) (stack {} {}))",
+        val_a, n_wire_c ,val_c, val_b, val_d
     );
     let expr = expr_str.parse().unwrap();
+    let goal = goal_str.parse().unwrap();
     let mut rules = vyzx_rules();
     rules.extend(dim_rules());
-    println!("{:?}", vyzx_rules::<ConstantFolding>());
+    // println!("{:?}", vyzx_rules::<ConstantFolding>());
     rules.extend(dep_rules());
     let mut runner = Runner::<ACDC, ConstantFolding, ()>::default()
         .with_explanations_enabled()
         .with_expr(&expr)
+        .with_expr(&goal)
         .run(&rules);
-    for (i, node) in runner.egraph.nodes().iter().enumerate() {
-        println!(
-            "{}: {:?} -> {:?}",
-            i,
-            node,
-            runner.egraph.id_to_node(runner.egraph.find(Id::from(i)))
-        );
-    }
+    // for (i, node) in runner.egraph.nodes().iter().enumerate() {
+    //     println!(
+    //         "{}: {:?} -> {:?}",
+    //         i,
+    //         node,
+    //         runner.egraph.id_to_node(runner.egraph.find(Id::from(i)))
+    //     );
+    // }
     let expr_id = runner.egraph.add_expr(&expr);
-    let res = runner.egraph.add_expr(&goal.parse().unwrap());
-    let mut expl = runner.explain_equivalence(&expr, &goal.parse().unwrap());
+    let res = runner.egraph.add_expr(&goal);
+    let mut expl = runner.explain_equivalence(&expr, &goal);
     let flat_explanations: Vec<_> = expl.make_flat_explanation().to_vec();
     let egraph = &runner.egraph;
-    for ft in flat_explanations {
-        let ftw = SerFlatTermWrap::from(ft, egraph);
-        let json = serde_json::to_string_pretty(&ftw).unwrap();
-        println!("{}", json);
-    }
+    let wrap_exprs: Vec<_> = flat_explanations
+        .iter()
+        .map(|ft| SerFlatTermWrap::from(ft.clone(), egraph))
+        .collect();
+    println!("{}", serde_json::to_string_pretty(&wrap_exprs).unwrap());
 
     assert_eq!(runner.egraph.find(expr_id), runner.egraph.find(res),);
 }
-
 
 
 fn dim_rules<T>() -> Vec<Rewrite<ACDC, T>>
@@ -184,6 +202,22 @@ where
             ],
             true,
         ),
+        generate_rw(
+            "n_wire_l",
+            &ACDCZX::Compose {
+                a: Box::from(ACDCZX::NWire {
+                    n: simple_symbol("n"),
+                }),
+                b: Box::from(simple_var("zx")),
+            },
+            &simple_var("zx"),
+            vec![ZXParam::new(
+                simple_symbol("n"),
+                simple_symbol("m"),
+                "zx",
+            )],
+            false ,
+        )
     ];
     rws.into_iter().flatten().collect()
 }
