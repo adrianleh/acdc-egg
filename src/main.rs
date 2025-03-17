@@ -1,7 +1,8 @@
 mod conditioneqwrapper;
 mod conds;
-mod vyzxlemma;
 mod serialize;
+mod vyzxlemma;
+mod vyzxrules;
 
 use crate::serialize::SerFlatTermWrap;
 use crate::vyzxlemma::{ZXParam, generate_rw};
@@ -11,9 +12,12 @@ use serde::Serializer;
 use serde::ser::SerializeStruct;
 use serde_derive::{Deserialize, Serialize};
 use std::cmp::max;
+use crate::vyzxrules::vyzx_rules;
 
 fn main() {
-    println!("{:?}", generate_rw::<ConstantFolding>(
+    println!(
+        "{:?}",
+        generate_rw::<ConstantFolding>(
             "n_wire_l",
             &ACDCZX::Compose {
                 a: Box::from(ACDCZX::NWire {
@@ -22,13 +26,10 @@ fn main() {
                 b: Box::from(simple_var("zx")),
             },
             &simple_var("zx"),
-            vec![ZXParam::new(
-                simple_symbol("n"),
-                simple_symbol("m"),
-                "zx",
-            )],
-            false ,
-        ));
+            vec![ZXParam::new(simple_symbol("n"), simple_symbol("m"), "zx",)],
+            false,
+        )
+    );
     let args: Vec<String> = std::env::args().collect();
     if args.contains(&"--version".to_string()) {
         println!("0.0.1");
@@ -45,7 +46,7 @@ fn main() {
     );
     let goal_str = format!(
         "(compose (stack {} (compose {} {})) (stack {} {}))",
-        val_a, n_wire_c ,val_c, val_b, val_d
+        val_a, n_wire_c, val_c, val_b, val_d
     );
     let expr = expr_str.parse().unwrap();
     let goal = goal_str.parse().unwrap();
@@ -79,7 +80,6 @@ fn main() {
 
     assert_eq!(runner.egraph.find(expr_id), runner.egraph.find(res),);
 }
-
 
 fn dim_rules<T>() -> Vec<Rewrite<ACDC, T>>
 where
@@ -144,83 +144,13 @@ fn simple_symbol(s: &str) -> ACDCDim {
     }
 }
 
-fn vyzx_rules<T>() -> Vec<Rewrite<ACDC, T>>
-where
-    T: Analysis<ACDC> + Clone + 'static,
-{
-    let rws = vec![
-        generate_rw(
-            "stack-assoc",
-            &ACDCZX::Stack {
-                a: Box::from(ACDCZX::Stack {
-                    a: Box::from(simple_var("a")),
-                    b: Box::from(simple_var("b")),
-                }),
-                b: Box::from(simple_var("c")),
-            },
-            &ACDCZX::Stack {
-                a: Box::from(simple_var("a")),
-                b: Box::from(ACDCZX::Stack {
-                    a: Box::from(simple_var("b")),
-                    b: Box::from(simple_var("c")),
-                }),
-            },
-            vec![
-                ZXParam::new(simple_symbol("n1"), simple_symbol("m1"), "a"),
-                ZXParam::new(simple_symbol("n2"), simple_symbol("m2"), "b"),
-                ZXParam::new(simple_symbol("n3"), simple_symbol("m3"), "c"),
-            ],
-            true,
-        ),
-        generate_rw(
-            "stack-compose-dist",
-            &ACDCZX::Stack {
-                a: Box::from(ACDCZX::Compose {
-                    a: Box::from(simple_var("a")),
-                    b: Box::from(simple_var("b")),
-                }),
-                b: Box::from(ACDCZX::Compose {
-                    a: Box::from(simple_var("c")),
-                    b: Box::from(simple_var("d")),
-                }),
-            },
-            &ACDCZX::Compose {
-                a: Box::from(ACDCZX::Stack {
-                    a: Box::from(simple_var("a")),
-                    b: Box::from(simple_var("c")),
-                }),
-                b: Box::from(ACDCZX::Stack {
-                    a: Box::from(simple_var("b")),
-                    b: Box::from(simple_var("d")),
-                }),
-            },
-            vec![
-                ZXParam::new(simple_symbol("n1"), simple_symbol("m1"), "a"),
-                ZXParam::new(simple_symbol("m1"), simple_symbol("o1"), "b"),
-                ZXParam::new(simple_symbol("n2"), simple_symbol("m2"), "c"),
-                ZXParam::new(simple_symbol("m2"), simple_symbol("o2"), "d"),
-            ],
-            true,
-        ),
-        generate_rw(
-            "n_wire_l",
-            &ACDCZX::Compose {
-                a: Box::from(ACDCZX::NWire {
-                    n: simple_symbol("n"),
-                }),
-                b: Box::from(simple_var("zx")),
-            },
-            &simple_var("zx"),
-            vec![ZXParam::new(
-                simple_symbol("n"),
-                simple_symbol("m"),
-                "zx",
-            )],
-            false ,
-        )
-    ];
-    rws.into_iter().flatten().collect()
+fn simple_lit(lit : i32) -> ACDCDim {
+    ACDCDim::Lit {
+        lit
+    }
 }
+
+
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ForceDepArgs {}
@@ -331,7 +261,7 @@ impl Analysis<ACDC> for ConstantFolding {
     }
 }
 
-#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ACDCDim {
     #[serde(rename = "const")]
@@ -350,6 +280,8 @@ pub enum ACDCDim {
         fn_name: String,
         args: Vec<ACDCDim>,
     },
+    Dep1 { zx: Box<ACDCZX> }, // TODO: Implement translation when dealing with ingestion from serialized strings
+    Dep2 { zx: Box<ACDCZX> },
 }
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(untagged)]

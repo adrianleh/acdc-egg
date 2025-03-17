@@ -31,6 +31,7 @@ fn find_all_symbols_in_expr_helper(dim: &ACDCDim, discovered_symbols: &mut HashS
                 find_all_symbols_in_expr_helper(arg, discovered_symbols);
             }
         }
+        _ => {}
     }
 }
 fn find_all_symbols_in_expr(dim: &ACDCDim) -> HashSet<String> {
@@ -67,6 +68,12 @@ fn to_acdc_expr(dim: &ACDCDim) -> String {
         ACDCDim::Mul { a, b } => format!("(* {} {})", to_acdc_expr(a), to_acdc_expr(b)),
         ACDCDim::Sub { a, b } => format!("(- {} {})", to_acdc_expr(a), to_acdc_expr(b)),
         ACDCDim::Fn { fn_name, args } => unimplemented!("Can't serialize fn, yet"),
+        ACDCDim::Dep1 { zx } => {
+            format!("(dep1 {})", acdczx_to_pattern(&*zx))
+        }
+        ACDCDim::Dep2 { zx } => {
+            format!("(dep2 {})", acdczx_to_pattern(&*zx))
+        }
     }
 }
 
@@ -85,12 +92,12 @@ fn contains_symbol(dim: &ACDCDim, s: &String) -> bool {
 
 fn contains_any_symbol(dim: &ACDCDim, s: &HashSet<String>) -> bool {
     match dim {
-        ACDCDim::Lit { lit: _ } => false,
         ACDCDim::Symbol { symbol } => s.contains(symbol),
         ACDCDim::Add { a, b } => contains_any_symbol(a, s) || contains_any_symbol(b, s),
         ACDCDim::Mul { a, b } => contains_any_symbol(a, s) || contains_any_symbol(b, s),
         ACDCDim::Sub { a, b } => contains_any_symbol(a, s) || contains_any_symbol(b, s),
         ACDCDim::Fn { fn_name: _, args } => args.iter().any(|a| contains_any_symbol(a, s)),
+        _ => false, // Lit, Dep{1,2}
     }
 }
 
@@ -360,7 +367,13 @@ impl ZXParam {
 
 fn acdczx_to_pattern(zx: &ACDCZX) -> String {
     match zx {
-        ACDCZX::Val { val: s, n: _, m: _ } => format!("?{}", s),
+        ACDCZX::Val { val: s, n, m } => {
+            if n.is_none() && m.is_none() {
+                format!("?{}", s)
+            } else {
+                format!("{}", s)
+            }
+        }
         ACDCZX::Cast { n, m, zx } => format!(
             "(cast {} {} {})",
             to_acdc_expr(n),
