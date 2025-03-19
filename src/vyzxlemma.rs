@@ -1,12 +1,18 @@
 use crate::conds::{
     AndCondition, ConditionEqualWrap, FalseCondition, TrueCondition, to_condition_equal,
 };
-use crate::{ACDC, ACDCDim, ACDCZX, Hyp, ZXOrDim};
+use crate::{ACDC, ACDCDim, ACDCZX, Hyp, ZXOrDim, simple_var};
 use egg::{Analysis, ConditionalApplier, Language, Pattern, Rewrite, Symbol};
 use serde_derive::{Deserialize, Serialize};
+use std::any::Any;
 use std::cmp::PartialEq;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
+use std::ops::Deref;
+use std::slice::Iter;
 use std::sync::Arc;
+
+pub const REVERSE_LEMMA_SUFFIX: &str = "-**rev**";
 
 fn find_all_symbols_in_expr_helper(dim: &ACDCDim, discovered_symbols: &mut HashSet<String>) {
     match dim {
@@ -60,14 +66,24 @@ struct ACDCDimConstraint {
     unsat: bool,
 }
 
-fn to_acdc_expr(dim: &ACDCDim) -> String {
+pub fn to_acdc_expr(dim: &ACDCDim) -> String {
     match dim {
         ACDCDim::Lit { lit } => lit.to_string(),
-        ACDCDim::Symbol { symbol: s } => format!("?{}", s.to_string()),
+        ACDCDim::Symbol { symbol: s } => {
+            // FIXME: Some symbols should not start with ?
+            format!("?{}", s.to_string())
+        }
         ACDCDim::Add { a, b } => format!("(+ {} {})", to_acdc_expr(a), to_acdc_expr(b)),
         ACDCDim::Mul { a, b } => format!("(* {} {})", to_acdc_expr(a), to_acdc_expr(b)),
         ACDCDim::Sub { a, b } => format!("(- {} {})", to_acdc_expr(a), to_acdc_expr(b)),
-        ACDCDim::Fn { fn_name, args } => unimplemented!("Can't serialize fn, yet"),
+        ACDCDim::Fn { fn_name, args } => format!(
+            "(Fn {} {})",
+            fn_name,
+            args.iter()
+                .map(to_acdc_expr)
+                .collect::<Vec<String>>()
+                .join(" ")
+        ),
         ACDCDim::Dep1 { zx } => {
             format!("(dep1 {})", acdczx_to_pattern(&*zx))
         }
@@ -75,6 +91,157 @@ fn to_acdc_expr(dim: &ACDCDim) -> String {
             format!("(dep2 {})", acdczx_to_pattern(&*zx))
         }
     }
+}
+
+fn replace_dim_subtree(dim: &ACDCDim, replace: &ACDCDim, with: &ACDCDim) -> ACDCDim {
+    if (dim == replace) {
+        return with.clone();
+    }
+    match dim {
+        ACDCDim::Add { a, b } => {
+            let a = replace_dim_subtree(a, replace, with);
+            let b = replace_dim_subtree(b, replace, with);
+            ACDCDim::Add {
+                a: Box::new(a),
+                b: Box::new(b),
+            }
+        }
+        ACDCDim::Mul { a, b } => {
+            let a = replace_dim_subtree(a, replace, with);
+            let b = replace_dim_subtree(b, replace, with);
+            ACDCDim::Mul {
+                a: Box::new(a),
+                b: Box::new(b),
+            }
+        }
+        ACDCDim::Sub { a, b } => {
+            let a = replace_dim_subtree(a, replace, with);
+            let b = replace_dim_subtree(b, replace, with);
+            ACDCDim::Sub {
+                a: Box::new(a),
+                b: Box::new(b),
+            }
+        }
+        ACDCDim::Fn { fn_name, args } => {
+            let args = args
+                .iter()
+                .map(|a| replace_dim_subtree(a, replace, with))
+                .collect();
+            ACDCDim::Fn {
+                fn_name: fn_name.clone(),
+                args,
+            }
+        }
+        _ => dim.clone(),
+    }
+}
+
+fn replace_dims_in_zx(zx: &ACDCZX, replace: &ACDCDim, with: &ACDCDim) -> ACDCZX {
+    match zx {
+        ACDCZX::Cast { n, m, zx } => {
+            let n = replace_dim_subtree(n, replace, with);
+            let m = replace_dim_subtree(m, replace, with);
+            ACDCZX::Cast {
+                n,
+                m,
+                zx: zx.clone(),
+            }
+        }
+        ACDCZX::Val { n, m, val } => {
+            let n = n.clone().map(|n| replace_dim_subtree(&n, replace, with));
+            let m = m.clone().map(|m| replace_dim_subtree(&m, replace, with));
+            ACDCZX::Val {
+                n,
+                m,
+                val: val.clone(),
+            }
+        }
+        ACDCZX::Z { n, m, alpha } => {
+            let n = replace_dim_subtree(n, replace, with);
+            let m = replace_dim_subtree(m, replace, with);
+            ACDCZX::Z {
+                n,
+                m,
+                alpha: alpha.clone(),
+            }
+        }
+        ACDCZX::X { n, m, alpha } => {
+            let n = replace_dim_subtree(n, replace, with);
+            let m = replace_dim_subtree(m, replace, with);
+            ACDCZX::X {
+                n,
+                m,
+                alpha: alpha.clone(),
+            }
+        }
+        ACDCZX::Stack { a, b } => {
+            let a = replace_dims_in_zx(a, replace, with);
+            let b = replace_dims_in_zx(b, replace, with);
+            ACDCZX::Stack {
+                a: Box::new(a),
+                b: Box::new(b),
+            }
+        }
+        ACDCZX::Compose { a, b } => {
+            let a = replace_dims_in_zx(a, replace, with);
+            let b = replace_dims_in_zx(b, replace, with);
+            ACDCZX::Compose {
+                a: Box::new(a),
+                b: Box::new(b),
+            }
+        }
+        ACDCZX::NWire { n } => {
+            let n = replace_dim_subtree(n, replace, with);
+            ACDCZX::NWire { n }
+        }
+        ACDCZX::Fn { fn_name, args } => {
+            let args = args
+                .iter()
+                .map(|a| match a {
+                    ZXOrDim::ZX(zx) => ZXOrDim::ZX(replace_dims_in_zx(zx, replace, with)),
+                    ZXOrDim::Dim(dim) => ZXOrDim::Dim(replace_dim_subtree(dim, replace, with)),
+                })
+                .collect();
+            ACDCZX::Fn {
+                fn_name: fn_name.clone(),
+                args,
+            }
+        }
+    }
+}
+
+fn replace_param_with_dep(dim: &ACDCDim, param: &ZXParam) -> ACDCDim {
+    let replaced_dim1 = replace_dim_subtree(
+        dim,
+        &param.n,
+        &ACDCDim::Dep1 {
+            zx: Box::new(simple_var(param.name.as_str())),
+        },
+    );
+    replace_dim_subtree(
+        &replaced_dim1,
+        &param.m,
+        &ACDCDim::Dep2 {
+            zx: Box::new(simple_var(param.name.as_str())),
+        },
+    )
+}
+
+fn replace_param_with_dep_zx(zx: &ACDCZX, param: &ZXParam) -> ACDCZX {
+    let replaced_dim_1 = replace_dims_in_zx(
+        zx,
+        &param.n,
+        &ACDCDim::Dep1 {
+            zx: Box::new(simple_var(param.name.as_str())),
+        },
+    );
+    replace_dims_in_zx(
+        &replaced_dim_1,
+        &param.m,
+        &ACDCDim::Dep2 {
+            zx: Box::new(simple_var(param.name.as_str())),
+        },
+    )
 }
 
 const PLACEHOLDER: &str = "#####PLACEHOLDER######";
@@ -306,8 +473,8 @@ fn dim_constr_to_cond_eq(l_name: &str, r_name: &str, constr: &ACDCDimConstraint)
 
     let mut e0 = exprs.0;
     let mut e1 = exprs.1;
-    println!("{}", e0.as_str());
-    println!("{}", e1.as_str());
+    // println!("{}", e0.as_str());
+    // println!("{}", e1.as_str());
     if constr.pos[0].pos.is_some() {
         let dep_arg_l = dep_type_str(
             constr.pos[0].pos.unwrap() + 1,
@@ -326,13 +493,13 @@ fn dim_constr_to_cond_eq(l_name: &str, r_name: &str, constr: &ACDCDimConstraint)
     } else {
         e1 = e1.replace(PLACEHOLDER, format!("?{}", r_name).as_str());
     }
-    println!("{} {}", l_name, r_name);
-    println!("{}", e0.as_str());
-    println!("{}", e1.as_str());
-    println!(
-        "{:?}",
-        ConditionEqualWrap::<ACDC>::new(e0.as_str().parse().unwrap(), e1.as_str().parse().unwrap(),)
-    );
+    // println!("{} {}", l_name, r_name);
+    // println!("{}", e0.as_str());
+    // println!("{}", e1.as_str());
+    // println!(
+    //     "{:?}",
+    //     ConditionEqualWrap::<ACDC>::new(e0.as_str().parse().unwrap(), e1.as_str().parse().unwrap(), )
+    // );
     Constr::Eq(ConditionEqualWrap::new(
         e0.as_str().parse().unwrap(),
         e1.as_str().parse().unwrap(),
@@ -365,13 +532,25 @@ impl ZXParam {
     }
 }
 
-fn acdczx_to_pattern(zx: &ACDCZX) -> String {
+pub fn zx_or_dim_pattern(zd: &ZXOrDim) -> String {
+    match zd {
+        ZXOrDim::ZX(zx) => acdczx_to_pattern(zx),
+        ZXOrDim::Dim(dim) => to_acdc_expr(dim),
+    }
+}
+
+pub fn acdczx_to_pattern(zx: &ACDCZX) -> String {
     match zx {
         ACDCZX::Val { val: s, n, m } => {
             if n.is_none() && m.is_none() {
                 format!("?{}", s)
             } else {
-                format!("{}", s)
+                format!(
+                    "(val {} {} {})",
+                    s,
+                    to_acdc_expr(&n.clone().unwrap()),
+                    to_acdc_expr(&m.clone().unwrap())
+                )
             }
         }
         ACDCZX::Cast { n, m, zx } => format!(
@@ -401,10 +580,14 @@ fn acdczx_to_pattern(zx: &ACDCZX) -> String {
             to_acdc_expr(m),
             to_acdc_expr(a)
         ),
-        ACDCZX::Fn {
-            fn_name: _,
-            args: _,
-        } => unimplemented!("Functions on ZX diagrams not yet supported"),
+        ACDCZX::Fn { fn_name, args } => format!(
+            "(fn {} {})",
+            fn_name,
+            args.iter()
+                .map(zx_or_dim_pattern)
+                .collect::<Vec<String>>()
+                .join(" ")
+        ),
     }
 }
 
@@ -463,6 +646,139 @@ pub fn collect_dim_symbols(zx: &ACDCZX) -> HashSet<String> {
         }
     }
 }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MatchedZXParam {
+    matched: ACDCZX,
+    name: String,
+}
+#[derive(Debug, Clone)]
+pub struct Lemma<T>
+where
+    T: Analysis<ACDC> + Clone + 'static + Debug,
+{
+    name: String,
+    lhs: Box<ACDCZX>,
+    rhs: Box<ACDCZX>,
+    params: Vec<ZXParam>,
+    bidirectional: bool,
+    rewrites: Vec<Rewrite<ACDC, T>>,
+}
+
+fn get_params_from_lemma(
+    lemma_zx: &ACDCZX,
+    matched: &ACDCZX,
+    params: &Vec<ZXParam>,
+) -> Vec<MatchedZXParam> {
+    let mut param_names = HashSet::new();
+    params.iter().for_each(|param| {
+        param_names.insert(param.name.clone());
+    });
+    match (lemma_zx, matched) {
+        (ACDCZX::Val { val, n, m }, r) => {
+            if param_names.contains(val) {
+                vec![MatchedZXParam {
+                    matched: r.clone(),
+                    name: val.clone(),
+                }]
+            } else {
+                vec![]
+            }
+        }
+        (ACDCZX::Stack { a: a1, b: b1 }, ACDCZX::Stack { a: a2, b: b2 }) => {
+            let mut ret = Vec::new();
+            ret.extend(get_params_from_lemma(a1, a2, params));
+            ret.extend(get_params_from_lemma(b1, b2, params));
+            ret
+        }
+        (ACDCZX::Compose { a: a1, b: b1 }, ACDCZX::Compose { a: a2, b: b2 }) => {
+            let mut ret = Vec::new();
+            ret.extend(get_params_from_lemma(a1, a2, params));
+            ret.extend(get_params_from_lemma(b1, b2, params));
+            ret
+        }
+        (
+            ACDCZX::Cast {
+                n: n1,
+                m: m1,
+                zx: zx1,
+            },
+            ACDCZX::Cast {
+                n: n2,
+                m: m2,
+                zx: zx2,
+            },
+        ) => {
+            if n1 != n2 || m1 != m2 {
+                panic!("Cast arg mismatch");
+            }
+            get_params_from_lemma(zx1, zx2, params)
+        }
+        (
+            ACDCZX::Fn {
+                fn_name: fn_name1,
+                args: args1,
+            },
+            ACDCZX::Fn {
+                fn_name: fn_name2,
+                args: args2,
+            },
+        ) => {
+            if fn_name1 != fn_name2 {
+                panic!("Fn name mismatch");
+            }
+            if args1.len() != args2.len() {
+                panic!("Fn arg mismatch");
+            }
+            let mut ret = Vec::new();
+            for (a1, a2) in args1.iter().zip(args2.iter()) {
+                match (a1, a2) {
+                    (ZXOrDim::ZX(zx1), ZXOrDim::ZX(zx2)) => {
+                        ret.extend(get_params_from_lemma(zx1, zx2, params));
+                    }
+                    (ZXOrDim::Dim(dim1), ZXOrDim::Dim(dim2)) => {
+                        if dim1 != dim2 {
+                            panic!("Fn arg mismatch");
+                        }
+                    }
+                    _ => panic!("Fn arg type mismatch"),
+                }
+            }
+            ret
+        }
+
+        (l, r) => {
+            if std::mem::discriminant(l) == std::mem::discriminant(r) {
+                vec![]
+            } else {
+                panic!("Found mismatch. Why did this match?")
+            }
+        }
+    }
+}
+
+impl<T> Lemma<T>
+where
+    T: Analysis<ACDC> + Clone + 'static + Debug,
+{
+    pub fn get_rewrites(&self) -> Vec<Rewrite<ACDC, T>> {
+        self.rewrites.clone()
+    }
+    pub fn get_rewrites_ref(&self) -> &Vec<Rewrite<ACDC, T>> {
+        &self.rewrites
+    }
+
+    pub fn get_params(&self, node: &ACDCZX, rhs: bool) -> Vec<MatchedZXParam> {
+        if (rhs && !self.bidirectional) {
+            panic!("Can only use rhs get_params on bidirectional lemmas");
+        }
+        let base = if rhs {
+            self.rhs.clone()
+        } else {
+            self.lhs.clone()
+        };
+        get_params_from_lemma(node, base.deref(), &self.params)
+    }
+}
 
 pub fn generate_rw<T>(
     name: &str,
@@ -470,14 +786,25 @@ pub fn generate_rw<T>(
     rhs: &ACDCZX,
     params: Vec<ZXParam>,
     bidirectional: bool,
-) -> Vec<Rewrite<ACDC, T>>
+) -> Lemma<T>
 where
-    T: Analysis<ACDC> + Clone + 'static,
+    T: Analysis<ACDC> + Clone + 'static + Debug,
 {
-    let mut all_symbols_in_exprs = collect_dim_symbols(lhs);
-    all_symbols_in_exprs.extend(collect_dim_symbols(rhs));
-    let l_pattern: Pattern<ACDC> = acdczx_to_pattern(lhs).as_str().parse().unwrap();
-    let r_pattern: Pattern<ACDC> = acdczx_to_pattern(rhs).as_str().parse().unwrap();
+    let replaced_lhs = &params.iter().fold(lhs.clone(), |acc, param| {
+        replace_param_with_dep_zx(&acc, &param)
+    });
+    let replaced_rhs = &params.iter().fold(rhs.clone(), |acc, param| {
+        replace_param_with_dep_zx(&acc, &param)
+    });
+    // println!("------");
+    // println!("{}", name);
+    // println!("{:?} - {:?}", lhs, replaced_lhs);
+    // println!("{:?} - {:?}", rhs, replaced_rhs);
+    // println!("------");
+    let mut all_symbols_in_exprs = collect_dim_symbols(replaced_lhs);
+    all_symbols_in_exprs.extend(collect_dim_symbols(replaced_rhs));
+    let l_pattern: Pattern<ACDC> = acdczx_to_pattern(replaced_lhs).as_str().parse().unwrap();
+    let r_pattern: Pattern<ACDC> = acdczx_to_pattern(replaced_rhs).as_str().parse().unwrap();
     let mut conditions = get_all_conditions(&params);
     conditions.extend(get_param_to_symbol_constraints(
         &params,
@@ -493,7 +820,16 @@ where
     for cond in conditions {
         match cond {
             Constr::Eq(c) => eq_conditions.push(c),
-            Constr::False(_) => return vec![], // If there is an unsatisfiable condition, we can't generate rewrites
+            Constr::False(_) => {
+                return Lemma {
+                    name: name.to_string(),
+                    lhs: Box::new(lhs.clone()),
+                    rhs: Box::new(rhs.clone()),
+                    params,
+                    bidirectional,
+                    rewrites: vec![],
+                };
+            } // If there is an unsatisfiable condition, we can't generate rewrites
         }
     }
     // let mut cond_r: ConditionalApplier<&ConditionEqual<ACDC>, _>;
@@ -513,13 +849,78 @@ where
         applier: r_pattern.clone(),
     };
     let rw = Rewrite::new(name, l_pattern.clone(), r_cond).unwrap();
+    let rws;
     if !bidirectional {
-        return vec![rw];
+        rws = vec![rw];
+    } else {
+        let l_cond: ConditionalApplier<AndCondition<ACDC, T>, Pattern<ACDC>> = ConditionalApplier {
+            condition: cond,
+            applier: l_pattern.clone(),
+        };
+        let rw_back = Rewrite::new(
+            format!("{}{}", name, REVERSE_LEMMA_SUFFIX),
+            r_pattern.clone(),
+            l_cond,
+        )
+        .unwrap();
+        rws = vec![rw, rw_back];
     }
-    let l_cond: ConditionalApplier<AndCondition<ACDC, T>, Pattern<ACDC>> = ConditionalApplier {
-        condition: cond,
-        applier: l_pattern.clone(),
-    };
-    let rw_back = Rewrite::new(format!("{}{}", name, "-rev"), r_pattern.clone(), l_cond).unwrap();
-    vec![rw, rw_back]
+    Lemma {
+        name: name.to_string(),
+        lhs: Box::new(lhs.clone()),
+        rhs: Box::new(rhs.clone()),
+        params,
+        bidirectional,
+        rewrites: rws,
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LemmaContainer<T>
+where
+    T: Analysis<ACDC> + Clone + Debug + 'static,
+{
+    lemmas: HashMap<String, Box<Lemma<T>>>,
+}
+
+impl<T> LemmaContainer<T>
+where
+    T: Analysis<ACDC> + Clone + Debug + 'static,
+{
+    pub fn new(lemmas: Vec<Lemma<T>>) -> Self {
+        let mut lemma_map = HashMap::new();
+        for lemma in lemmas {
+            lemma_map.insert(lemma.name.clone(), Box::new(lemma));
+        }
+        LemmaContainer { lemmas: lemma_map }
+    }
+
+    pub fn get(&self, name: &String) -> Option<Box<Lemma<T>>> {
+        if name.ends_with(REVERSE_LEMMA_SUFFIX) {
+            let lemma = self
+                .lemmas
+                .get(name.strip_suffix(REVERSE_LEMMA_SUFFIX).unwrap())
+                .cloned();
+            if (&lemma).is_none() {
+                return None;
+            }
+            let lemma = lemma.unwrap();
+            if (&lemma).bidirectional {
+                // Only return if bidirectional and reverse
+                return Some(lemma);
+            }
+            return None;
+        }
+        self.lemmas.get(name).cloned()
+    }
+
+    pub fn get_match_args(&self, name: String, candidate: &ACDCZX) -> Option<Vec<MatchedZXParam>> {
+        let lemma = self.get(&name);
+        if (&lemma).is_none() {
+            return None;
+        }
+        let lemma = lemma.unwrap();
+        let params = lemma.get_params(candidate, name.ends_with(REVERSE_LEMMA_SUFFIX));
+        Some(params)
+    }
 }

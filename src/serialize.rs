@@ -214,7 +214,7 @@ impl<'a, A: Analysis<ACDC>> Ser for SerFlatTermWrap<'a, ACDC, A> {
             return state.end();
         }
         let mut state = serializer.serialize_struct("SerFlatTermWrap", 4)?;
-        state.serialize_field("node", &self.0.node.to_ser(self.1))?;
+        // state.serialize_field("node", &self.0.node.to_ser(self.1))?;
         state.serialize_field("backward_rule", bwd_rule)?;
         state.serialize_field("forward_rule", fwd_rule)?;
         state.serialize_field("children", &self.non_empty_children())?;
