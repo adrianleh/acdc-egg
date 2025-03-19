@@ -8,6 +8,7 @@ use std::any::Any;
 use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
+use std::iter::Map;
 use std::ops::Deref;
 use std::slice::Iter;
 use std::sync::Arc;
@@ -664,37 +665,82 @@ where
     rewrites: Vec<Rewrite<ACDC, T>>,
 }
 
+impl<T> Lemma<T> where
+    T: Analysis<ACDC> + Clone + 'static + Debug
+{
+    pub fn to_ordered_params(&self, params:&Vec<MatchedZXParam>) -> Vec<ACDCZX> {
+        let mut map = HashMap::new();
+        for param in params {
+            map.insert(param.name.clone(), param.matched.clone());
+        }
+        let mut ret = vec![];
+        for param in &self.params {
+            if !map.contains_key(&param.name) {
+                panic!("Missing param {}", param.name);
+            }
+            ret.push(map.get(&param.name).unwrap().clone());
+        }
+        ret
+    }
+}
+
+macro_rules! found_var {
+    ($param_names:ident,$val:ident,$x:ident) => {
+        if $param_names.contains($val) {
+                Ok(vec![MatchedZXParam {
+                    matched: $x.clone(),
+                    name: $val.clone(),
+                }])
+            } else {
+                Ok(vec![])
+            }
+    };
+}
+
 fn get_params_from_lemma(
     lemma_zx: &ACDCZX,
     matched: &ACDCZX,
     params: &Vec<ZXParam>,
-) -> Vec<MatchedZXParam> {
+) -> Result<Vec<MatchedZXParam>, String> {
     let mut param_names = HashSet::new();
     params.iter().for_each(|param| {
         param_names.insert(param.name.clone());
     });
+    eprintln!("{:?}\n-----\n{:?}", lemma_zx, matched);
     match (lemma_zx, matched) {
         (ACDCZX::Val { val, n, m }, r) => {
-            if param_names.contains(val) {
-                vec![MatchedZXParam {
-                    matched: r.clone(),
-                    name: val.clone(),
-                }]
-            } else {
-                vec![]
-            }
+            found_var!(param_names, val, r)
+        }
+        (l, ACDCZX::Val { val, n, m }) => {
+            found_var!(param_names, val, l)
         }
         (ACDCZX::Stack { a: a1, b: b1 }, ACDCZX::Stack { a: a2, b: b2 }) => {
             let mut ret = Vec::new();
-            ret.extend(get_params_from_lemma(a1, a2, params));
-            ret.extend(get_params_from_lemma(b1, b2, params));
-            ret
+            let a_matches = get_params_from_lemma(a1, a2, params);
+            let b_matches = get_params_from_lemma(b1, b2, params);
+            if a_matches.is_err() {
+                return a_matches;
+            }
+            if b_matches.is_err() {
+                return b_matches;
+            }
+            ret.extend(a_matches?);
+            ret.extend(b_matches?);
+            Ok(ret)
         }
         (ACDCZX::Compose { a: a1, b: b1 }, ACDCZX::Compose { a: a2, b: b2 }) => {
             let mut ret = Vec::new();
-            ret.extend(get_params_from_lemma(a1, a2, params));
-            ret.extend(get_params_from_lemma(b1, b2, params));
-            ret
+            let a_matches = get_params_from_lemma(a1, a2, params);
+            let b_matches = get_params_from_lemma(b1, b2, params);
+            if a_matches.is_err() {
+                return a_matches;
+            }
+            if b_matches.is_err() {
+                return b_matches;
+            }
+            ret.extend(a_matches?);
+            ret.extend(b_matches?);
+            Ok(ret)
         }
         (
             ACDCZX::Cast {
@@ -709,7 +755,7 @@ fn get_params_from_lemma(
             },
         ) => {
             if n1 != n2 || m1 != m2 {
-                panic!("Cast arg mismatch");
+                return Err("Cast arg mismatch".to_string());
             }
             get_params_from_lemma(zx1, zx2, params)
         }
@@ -724,33 +770,38 @@ fn get_params_from_lemma(
             },
         ) => {
             if fn_name1 != fn_name2 {
-                panic!("Fn name mismatch");
+                return Err("Fn name mismatch".to_string());
             }
             if args1.len() != args2.len() {
-                panic!("Fn arg mismatch");
+                return Err("Fn arg mismatch".to_string());
             }
             let mut ret = Vec::new();
             for (a1, a2) in args1.iter().zip(args2.iter()) {
                 match (a1, a2) {
                     (ZXOrDim::ZX(zx1), ZXOrDim::ZX(zx2)) => {
-                        ret.extend(get_params_from_lemma(zx1, zx2, params));
+                        let result = get_params_from_lemma(zx1, zx2, params);
+                        if result.is_err() {
+                            return result;
+                        }
+                        ret.extend(result?);
                     }
                     (ZXOrDim::Dim(dim1), ZXOrDim::Dim(dim2)) => {
                         if dim1 != dim2 {
-                            panic!("Fn arg mismatch");
+                            return Err("Fn arg mismatch".to_string());
                         }
                     }
-                    _ => panic!("Fn arg type mismatch"),
+                    _ => return Err("Fn arg type mismatch".to_string()),
                 }
             }
-            ret
+            Ok(ret)
         }
 
         (l, r) => {
             if std::mem::discriminant(l) == std::mem::discriminant(r) {
-                vec![]
+                Ok(vec![])
             } else {
-                panic!("Found mismatch. Why did this match?")
+                eprintln!("Mismatch: {:?} - {:?}", l, r);
+                Err("Found mismatch. Why did this match?".to_string())
             }
         }
     }
@@ -767,16 +818,10 @@ where
         &self.rewrites
     }
 
-    pub fn get_params(&self, node: &ACDCZX, rhs: bool) -> Vec<MatchedZXParam> {
-        if (rhs && !self.bidirectional) {
-            panic!("Can only use rhs get_params on bidirectional lemmas");
-        }
-        let base = if rhs {
-            self.rhs.clone()
-        } else {
-            self.lhs.clone()
-        };
-        get_params_from_lemma(node, base.deref(), &self.params)
+    pub fn get_params(&self, node: &ACDCZX) -> Vec<MatchedZXParam> {
+        get_params_from_lemma(node, self.lhs.deref(), &self.params)
+            .or(get_params_from_lemma(node, self.rhs.deref(), &self.params))
+            .unwrap_or_else(|x| panic!("{}", x))
     }
 }
 
@@ -914,13 +959,15 @@ where
         self.lemmas.get(name).cloned()
     }
 
-    pub fn get_match_args(&self, name: String, candidate: &ACDCZX) -> Option<Vec<MatchedZXParam>> {
-        let lemma = self.get(&name);
+    pub fn get_match_args(&self, name: &String, candidate: &ACDCZX) -> Option<Vec<MatchedZXParam>> {
+        let lemma = self.get(name);
         if (&lemma).is_none() {
             return None;
         }
         let lemma = lemma.unwrap();
-        let params = lemma.get_params(candidate, name.ends_with(REVERSE_LEMMA_SUFFIX));
+        let params = lemma.get_params(candidate);
         Some(params)
     }
 }
+
+

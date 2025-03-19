@@ -8,7 +8,7 @@ mod conv;
 
 use crate::problems::*;
 use crate::serialize::SerFlatTermWrap;
-use crate::vyzxlemma::acdczx_to_pattern;
+use crate::vyzxlemma::{acdczx_to_pattern, LemmaContainer};
 use crate::vyzxrules::{vyzx_rules, vyzx_rws};
 use egg::*;
 use serde::ser::SerializeStruct;
@@ -23,7 +23,7 @@ fn main() {
         println!("0.0.1");
         return;
     }
-    let json = prob_6();
+    let json = prob_19();
     let zx: Lemma = serde_json::from_str(json).expect("Failed to parse JSON");
     // let val_a = "(val n1 (* 1 m1) a)";
     // let val_b = "(val (+ 0 m1) o1 b)";
@@ -40,6 +40,7 @@ fn main() {
     // );
     let expr = acdczx_to_pattern(&zx.prop.l).parse().unwrap();
     let goal = acdczx_to_pattern(&zx.prop.r).parse().unwrap();
+    let lemmas = LemmaContainer::new(vyzx_rules());
     let mut rules = vyzx_rws();
     rules.extend(dim_rules());
     // println!("{:?}", vyzx_rules::<ConstantFolding>());
@@ -77,7 +78,7 @@ fn main() {
     eprintln!("Converting...");
     let wrap_exprs: Vec<_> = flat_explanations
         .iter()
-        .map(|ft| SerFlatTermWrap::from(ft.clone(), egraph))
+        .map(|ft| SerFlatTermWrap::from(ft.clone(), egraph, &lemmas))
         .collect();
     let end_expl_time = std::time::Instant::now();
     println!("{}", serde_json::to_string_pretty(&wrap_exprs).unwrap());

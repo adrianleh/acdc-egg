@@ -75,7 +75,7 @@ pub enum ZXOrDimOrEither {
     Either(ACDCZX, ACDCDim),
 }
 
-fn get_zx(zde: &ZXOrDimOrEither) -> Option<ACDCZX> {
+pub fn get_zx(zde: &ZXOrDimOrEither) -> Option<ACDCZX> {
     match zde {
         ZXOrDimOrEither::ZX(zx) => Some(zx.clone()),
         ZXOrDimOrEither::Dim(_) => None,
@@ -83,7 +83,7 @@ fn get_zx(zde: &ZXOrDimOrEither) -> Option<ACDCZX> {
     }
 }
 
-fn get_dim(zde: &ZXOrDimOrEither) -> Option<ACDCDim> {
+pub fn get_dim(zde: &ZXOrDimOrEither) -> Option<ACDCDim> {
     match zde {
         ZXOrDimOrEither::ZX(_) => None,
         ZXOrDimOrEither::Dim(dim) => Some(dim.clone()),
@@ -91,7 +91,7 @@ fn get_dim(zde: &ZXOrDimOrEither) -> Option<ACDCDim> {
     }
 }
 
-fn is_dim(zde: &ZXOrDimOrEither) -> bool {
+pub fn is_dim(zde: &ZXOrDimOrEither) -> bool {
     match zde {
         ZXOrDimOrEither::ZX(_) => false,
         ZXOrDimOrEither::Dim(_) => true,
@@ -99,7 +99,7 @@ fn is_dim(zde: &ZXOrDimOrEither) -> bool {
     }
 }
 
-fn is_zx(zde: &ZXOrDimOrEither) -> bool {
+pub fn is_zx(zde: &ZXOrDimOrEither) -> bool {
     match zde {
         ZXOrDimOrEither::ZX(_) => true,
         ZXOrDimOrEither::Dim(_) => false,
@@ -107,7 +107,7 @@ fn is_zx(zde: &ZXOrDimOrEither) -> bool {
     }
 }
 
-fn to_zx_or_dim(zde: &ZXOrDimOrEither, prio_dim: bool) -> ZXOrDim {
+pub fn to_zx_or_dim(zde: &ZXOrDimOrEither, prio_dim: bool) -> ZXOrDim {
     match zde {
         ZXOrDimOrEither::ZX(zx) => ZXOrDim::ZX(zx.clone()),
         ZXOrDimOrEither::Dim(dim) => ZXOrDim::Dim(dim.clone()),
@@ -121,7 +121,7 @@ fn to_zx_or_dim(zde: &ZXOrDimOrEither, prio_dim: bool) -> ZXOrDim {
     }
 }
 
-fn acdc_to_acdc_zx_or_dim<T>(acdc: &ACDC, egraph: &EGraph<ACDC, T>) -> ZXOrDimOrEither
+pub fn acdc_to_acdc_zx_or_dim<T>(acdc: &ACDC, egraph: &EGraph<ACDC, T>) -> ZXOrDimOrEither
 where
     T: egg::Analysis<ACDC> + 'static + Clone + Debug,
 {
