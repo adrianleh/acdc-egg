@@ -676,7 +676,8 @@ impl<T> Lemma<T> where
         let mut ret = vec![];
         for param in &self.params {
             if !map.contains_key(&param.name) {
-                panic!("Missing param {}", param.name);
+                continue;
+                // panic!("Missing param {}", param.name);
             }
             ret.push(map.get(&param.name).unwrap().clone());
         }
@@ -754,9 +755,9 @@ fn get_params_from_lemma(
                 zx: zx2,
             },
         ) => {
-            if n1 != n2 || m1 != m2 {
-                return Err("Cast arg mismatch".to_string());
-            }
+            // if n1 != n2 || m1 != m2 {
+            //     return Err("Cast arg mismatch".to_string());
+            // }
             get_params_from_lemma(zx1, zx2, params)
         }
         (

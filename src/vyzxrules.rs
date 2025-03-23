@@ -8,7 +8,7 @@ where
     T: Analysis<ACDC> + Clone + 'static + std::fmt::Debug,
 {
     let lemmata = vec![
-        // stack_assoc(),
+        stack_assoc(),
         stack_assoc_back(),
         stack_empty_top(),
         stack_empty_bot(),
@@ -50,7 +50,7 @@ where
     T: Analysis<ACDC> + Clone + Debug + 'static,
 {
     generate_rw(
-        "stack-assoc",
+        "stack_assoc",
         &ACDCZX::Stack {
             a: Box::from(ACDCZX::Stack {
                 a: Box::from(simple_var("a")),
@@ -95,7 +95,7 @@ where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {
     generate_rw(
-        "stack-assoc-back",
+        "stack_assoc_back",
         &ACDCZX::Stack {
             a: Box::from(simple_var("a")),
             b: Box::from(ACDCZX::Stack {
@@ -140,7 +140,7 @@ where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {
     generate_rw(
-        "compose-assoc",
+        "compose_assoc",
         &ACDCZX::Compose {
             a: Box::from(simple_var("a")),
             b: Box::from(ACDCZX::Compose {
@@ -169,7 +169,7 @@ where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {
     generate_rw(
-        "n_wire_l",
+        "nwire_removal_l",
         &ACDCZX::Compose {
             a: Box::from(ACDCZX::NWire {
                 n: simple_symbol("n"),
@@ -187,7 +187,7 @@ where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {
     generate_rw(
-        "n_wire_r",
+        "nwire_removal_r",
         &ACDCZX::Compose {
             a: Box::from(simple_var("zx")),
             b: Box::from(ACDCZX::NWire {
@@ -240,7 +240,6 @@ where
         vec![],
         true,
     );
-    eprintln!("wire_to_nwire: {:?}", rw);
     rw
 }
 
@@ -362,7 +361,7 @@ where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {
     generate_rw(
-        "stack-compose-dist",
+        "stack_compose_distr",
         &ACDCZX::Stack {
             a: Box::from(ACDCZX::Compose {
                 a: Box::from(simple_var("a")),

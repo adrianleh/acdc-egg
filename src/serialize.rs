@@ -1,7 +1,7 @@
 use crate::ACDC;
 use crate::conv::{acdc_to_acdc_zx_or_dim, get_zx, is_zx};
 use crate::vyzxlemma::{Lemma, LemmaContainer, REVERSE_LEMMA_SUFFIX};
-use egg::{Analysis, EGraph, FlatTerm, Id, Language};
+use egg::{Analysis, EGraph, FlatTerm, Id, Language, RecExpr};
 use serde::Serialize as Ser;
 use serde::Serializer;
 use serde::ser::SerializeStruct;
@@ -187,6 +187,7 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> SerFlatTermWrap<'a, A> {
         egraph: &'a EGraph<ACDC, A>,
         lemmas: &'a LemmaContainer<A>,
     ) -> Self {
+        let re = flat_term.get_recexpr();
         SerFlatTermWrap(flat_term, egraph, lemmas)
     }
 
@@ -225,7 +226,7 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
             let mut state = serializer.serialize_struct("SerFlatTermWrap", 0)?;
             return state.end();
         }
-        let mut state = serializer.serialize_struct("SerFlatTermWrap", 4)?;
+        let mut state = serializer.serialize_struct("SerFlatTermWrap", 5)?;
         state.serialize_field("backward_rule", bwd_rule)?;
         state.serialize_field("forward_rule", fwd_rule)?;
         state.serialize_field("children", &self.non_empty_children())?;
@@ -248,6 +249,7 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
 
         }
         state.serialize_field("arguments", &arguments)?;
+        state.serialize_field("node", &acdc_to_acdc_zx_or_dim(&self.0.node, self.1))?;
         state.end()
     }
 }

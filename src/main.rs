@@ -5,6 +5,7 @@ mod serialize;
 mod vyzxlemma;
 mod vyzxrules;
 mod conv;
+mod diff;
 
 use crate::problems::*;
 use crate::serialize::SerFlatTermWrap;
@@ -23,7 +24,19 @@ fn main() {
         println!("0.0.1");
         return;
     }
-    let json = prob_19();
+    let i : usize;
+    if args.len() == 2 {
+        i = args[1].parse().unwrap();
+    } else {
+        println!("Provide 1 arg!");
+        return;
+    }
+    eprintln!("--------Prob {}-----",i);
+    let json = all_problems()[i];
+    run_with_problem(json);
+}
+
+fn run_with_problem(json: &str) {
     let zx: Lemma = serde_json::from_str(json).expect("Failed to parse JSON");
     // let val_a = "(val n1 (* 1 m1) a)";
     // let val_b = "(val (+ 0 m1) o1 b)";
@@ -57,6 +70,9 @@ fn main() {
         "Run time: {}ms",
         end_time.duration_since(start_time).as_millis()
     );
+    let expr_id = runner.egraph.add_expr(&expr);
+    let res = runner.egraph.add_expr(&goal);
+    assert_eq!(runner.egraph.find(expr_id), runner.egraph.find(res),);
     // for (i, node) in runner.egraph.nodes().iter().enumerate() {
     //     println!(
     //         "{}: {:?} -> {:?}",
@@ -66,16 +82,14 @@ fn main() {
     //     );
     // }
 
-    let expr_id = runner.egraph.add_expr(&expr);
-    let res = runner.egraph.add_expr(&goal);
-    let start_expl_time = std::time::Instant::now();
     eprintln!("Explaining...");
+    let start_expl_time = std::time::Instant::now();
     let mut expl = runner.explain_equivalence(&expr, &goal);
     eprintln!("size {}", expl.get_tree_size());
-    eprintln!("Flattening...");
+    // eprintln!("Flattening...");
     let flat_explanations: Vec<_> = expl.make_flat_explanation().to_vec();
     let egraph = &runner.egraph;
-    eprintln!("Converting...");
+    // eprintln!("Converting...");
     let wrap_exprs: Vec<_> = flat_explanations
         .iter()
         .map(|ft| SerFlatTermWrap::from(ft.clone(), egraph, &lemmas))
@@ -83,13 +97,11 @@ fn main() {
     let end_expl_time = std::time::Instant::now();
     println!("{}", serde_json::to_string_pretty(&wrap_exprs).unwrap());
 
-    assert_eq!(runner.egraph.find(expr_id), runner.egraph.find(res),);
 
     eprintln!(
         "Explain time: {}ms",
         end_expl_time.duration_since(start_expl_time).as_millis()
-    );
-}
+    );}
 
 fn dim_rules<T>() -> Vec<Rewrite<ACDC, T>>
 where
