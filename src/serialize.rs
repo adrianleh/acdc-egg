@@ -1,6 +1,6 @@
-use crate::{ACDC, ACDCZX};
-use crate::vyzxlemma::{Lemma, LemmaContainer, REVERSE_LEMMA_SUFFIX};
-use egg::{Analysis, EGraph, FlatTerm, Id, Language, RecExpr};
+use crate::ACDC;
+use crate::vyzxlemma::LemmaContainer;
+use egg::{Analysis, EGraph, FlatTerm, Language, RecExpr};
 use crate::conv::{acdc_to_acdc_zx_or_dim};
 use serde::ser::SerializeStruct;
 use serde::Serialize as Ser;
@@ -226,7 +226,7 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
         let fwd_rule = &self.term.forward_rule.map(|x| x.to_string());
         let bwd_rule = &self.term.backward_rule.map(|x| x.to_string());
         if !self.contains_proof() {
-            let mut state = serializer.serialize_struct("SerFlatTermWrap", 0)?;
+            let state = serializer.serialize_struct("SerFlatTermWrap", 0)?;
             return state.end();
         }
         let mut state = serializer.serialize_struct("SerFlatTermWrap", 5)?;

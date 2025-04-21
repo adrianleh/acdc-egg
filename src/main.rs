@@ -14,9 +14,6 @@ use crate::serialize::SerFlatTermWrap;
 use crate::vyzxlemma::{LemmaContainer, acdczx_to_pattern};
 use crate::vyzxrules::{vyzx_rules, vyzx_rws};
 use egg::*;
-use serde::Serialize as Ser;
-use serde::Serializer;
-use serde::ser::SerializeStruct;
 use serde_derive::{Deserialize, Serialize};
 use std::cmp::max;
 

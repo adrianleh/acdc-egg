@@ -4,13 +4,10 @@ use crate::conds::{
 use crate::{ACDC, ACDCDim, ACDCZX, Hyp, ZXOrDim, simple_var};
 use egg::{Analysis, ConditionalApplier, Language, Pattern, RecExpr, Rewrite, Symbol};
 use serde_derive::{Deserialize, Serialize};
-use std::any::Any;
 use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use std::iter::Map;
 use std::ops::Deref;
-use std::slice::Iter;
 use std::sync::Arc;
 
 pub const REVERSE_LEMMA_SUFFIX: &str = "-**rev**";
@@ -95,7 +92,7 @@ pub fn to_acdc_expr(dim: &ACDCDim) -> String {
 }
 
 fn replace_dim_subtree(dim: &ACDCDim, replace: &ACDCDim, with: &ACDCDim) -> ACDCDim {
-    if (dim == replace) {
+    if dim == replace {
         return with.clone();
     }
     match dim {
@@ -377,7 +374,7 @@ fn get_all_combinations_zx_params(params: &Vec<ZXParam>) -> Vec<(ZXParam, ZXPara
 fn is_symbol_from(dim: &ACDCDim, s: &HashSet<String>) -> Option<String> {
     match dim {
         ACDCDim::Symbol { symbol } => {
-            if (s.contains(symbol)) {
+            if s.contains(symbol) {
                 Some(symbol.to_string())
             } else {
                 None

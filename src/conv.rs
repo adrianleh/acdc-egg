@@ -223,7 +223,7 @@ where
             ZXOrDimOrEither::ZX(ACDCZX::NWire { n: dim.clone() })
         }
         ACDC::Fn(fn_name, args) => {
-            let mut args = args
+            let args = args
                 .iter()
                 .map(|id| egraph.id_to_node(*id))
                 .map(|acdc| acdc_to_acdc_zx_or_dim(acdc, egraph))

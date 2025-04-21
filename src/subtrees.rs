@@ -1,8 +1,4 @@
-use crate::vyzxlemma::Lemma;
 use crate::{ACDCDim, ACDCZX, ZXOrDim};
-use egg::Analysis;
-use std::collections::HashMap;
-use std::fmt::Debug;
 
 fn is_equal_subtree_dim(a: &ACDCDim, b: &ACDCDim) -> bool {
     match (a, b) {
@@ -139,7 +135,7 @@ fn is_equal_subtree_zx(a: &ACDCZX, b: &ACDCZX) -> bool {
                 args: a2,
             },
         ) => {
-            if (fn1 != fn2) {
+            if fn1 != fn2 {
                 return false;
             }
             if a1.len() != a2.len() {
