@@ -1,12 +1,10 @@
-use crate::ACDC;
 use crate::conv::{acdc_to_acdc_zx_or_dim, get_zx, is_zx};
-use crate::vyzxlemma::{Lemma, LemmaContainer, REVERSE_LEMMA_SUFFIX};
-use egg::{Analysis, EGraph, FlatTerm, Id, Language, RecExpr};
+use crate::vyzxlemma::LemmaContainer;
+use crate::ACDC;
+use egg::{Analysis, EGraph, FlatTerm, Language};
+use serde::ser::SerializeStruct;
 use serde::Serialize as Ser;
 use serde::Serializer;
-use serde::ser::SerializeStruct;
-use serde_derive::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fmt::Debug;
 
 #[derive(Debug, Clone)]

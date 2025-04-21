@@ -1,7 +1,5 @@
-use std::collections::HashMap;
 use crate::{ZXOrDim, ACDCZX};
 use std::ops::Deref;
-use crate::vyzxlemma::Lemma;
 
 // Idea
 // 1. Find largest diff resulting from rw

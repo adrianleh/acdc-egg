@@ -75,51 +75,63 @@ pub enum ZXOrDimOrEither {
     Either(ACDCZX, ACDCDim),
 }
 
-pub fn get_zx(zde: &ZXOrDimOrEither) -> Option<ACDCZX> {
-    match zde {
-        ZXOrDimOrEither::ZX(zx) => Some(zx.clone()),
-        ZXOrDimOrEither::Dim(_) => None,
-        ZXOrDimOrEither::Either(zx, _) => Some(zx.clone()),
-    }
-}
 
-pub fn get_dim(zde: &ZXOrDimOrEither) -> Option<ACDCDim> {
-    match zde {
-        ZXOrDimOrEither::ZX(_) => None,
-        ZXOrDimOrEither::Dim(dim) => Some(dim.clone()),
-        ZXOrDimOrEither::Either(_, dim) => Some(dim.clone()),
+impl ZXOrDimOrEither {
+    #[inline]
+    pub fn get_zx(self: &ZXOrDimOrEither) -> Option<ACDCZX> {
+        match self {
+            ZXOrDimOrEither::ZX(zx) => Some(zx.clone()),
+            ZXOrDimOrEither::Dim(_) => None,
+            ZXOrDimOrEither::Either(zx, _) => Some(zx.clone()),
+        }
     }
-}
 
-pub fn is_dim(zde: &ZXOrDimOrEither) -> bool {
-    match zde {
-        ZXOrDimOrEither::ZX(_) => false,
-        ZXOrDimOrEither::Dim(_) => true,
-        ZXOrDimOrEither::Either(_, _) => true,
+    #[inline]
+    pub fn get_dim(self: &ZXOrDimOrEither) -> Option<ACDCDim> {
+        match self {
+            ZXOrDimOrEither::ZX(_) => None,
+            ZXOrDimOrEither::Dim(dim) => Some(dim.clone()),
+            ZXOrDimOrEither::Either(_, dim) => Some(dim.clone()),
+        }
     }
-}
 
-pub fn is_zx(zde: &ZXOrDimOrEither) -> bool {
-    match zde {
-        ZXOrDimOrEither::ZX(_) => true,
-        ZXOrDimOrEither::Dim(_) => false,
-        ZXOrDimOrEither::Either(_, _) => true,
+
+    #[inline]
+    pub fn is_dim(self: &ZXOrDimOrEither) -> bool {
+        match self {
+            ZXOrDimOrEither::ZX(_) => false,
+            ZXOrDimOrEither::Dim(_) => true,
+            ZXOrDimOrEither::Either(_, _) => true,
+        }
     }
-}
 
-pub fn to_zx_or_dim(zde: &ZXOrDimOrEither, prio_dim: bool) -> ZXOrDim {
-    match zde {
-        ZXOrDimOrEither::ZX(zx) => ZXOrDim::ZX(zx.clone()),
-        ZXOrDimOrEither::Dim(dim) => ZXOrDim::Dim(dim.clone()),
-        ZXOrDimOrEither::Either(zx, dim) => {
-            if prio_dim {
-                ZXOrDim::Dim(dim.clone())
-            } else {
-                ZXOrDim::ZX(zx.clone())
+    #[inline]
+    pub fn is_zx(self: &ZXOrDimOrEither) -> bool {
+        match self {
+            ZXOrDimOrEither::ZX(_) => true,
+            ZXOrDimOrEither::Dim(_) => false,
+            ZXOrDimOrEither::Either(_, _) => true,
+        }
+    }
+
+    pub fn to_zx_or_dim(self: &ZXOrDimOrEither, prio_dim: bool) -> ZXOrDim {
+        match self {
+            ZXOrDimOrEither::ZX(zx) => ZXOrDim::ZX(zx.clone()),
+            ZXOrDimOrEither::Dim(dim) => ZXOrDim::Dim(dim.clone()),
+            ZXOrDimOrEither::Either(zx, dim) => {
+                if prio_dim {
+                    ZXOrDim::Dim(dim.clone())
+                } else {
+                    ZXOrDim::ZX(zx.clone())
+                }
             }
         }
     }
+
 }
+
+
+
 
 pub fn acdc_to_acdc_zx_or_dim<T>(acdc: &ACDC, egraph: &EGraph<ACDC, T>) -> ZXOrDimOrEither
 where
@@ -156,13 +168,13 @@ where
             let n = egraph.id_to_node(ids[0]);
             let m = egraph.id_to_node(ids[1]);
             let zx = egraph.id_to_node(ids[2]);
-            let n = get_dim(&acdc_to_acdc_zx_or_dim(n, egraph))
+            let n = &acdc_to_acdc_zx_or_dim(n, egraph).get_dim()
                 .or_else(|| panic!("Type error: Cast n points to ZX"))
                 .unwrap();
-            let m = get_dim(&acdc_to_acdc_zx_or_dim(m, egraph))
+            let m = &acdc_to_acdc_zx_or_dim(m, egraph).get_dim()
                 .or_else(|| panic!("Type error: Cast m points to ZX"))
                 .unwrap();
-            let zx = get_zx(&acdc_to_acdc_zx_or_dim(zx, egraph))
+            let zx = &acdc_to_acdc_zx_or_dim(zx, egraph).get_zx()
                 .or_else(|| panic!("Type error: Cast zx points to Dim"))
                 .unwrap();
             ZXOrDimOrEither::ZX(ACDCZX::Cast {
@@ -181,7 +193,7 @@ where
             let mut dims = vec![];
             for id in ids {
                 let node = egraph.id_to_node(*id);
-                let dim = get_dim(&acdc_to_acdc_zx_or_dim(node, egraph))
+                let dim = &acdc_to_acdc_zx_or_dim(node, egraph).get_dim()
                     .or_else(|| panic!("Type error: Val points to ZX"))
                     .unwrap();
                 dims.push(dim);
@@ -205,7 +217,7 @@ where
         }
         ACDC::NWire(id) => {
             let node = egraph.id_to_node(*id);
-            let dim = get_dim(&acdc_to_acdc_zx_or_dim(node, egraph))
+            let dim = &acdc_to_acdc_zx_or_dim(node, egraph).get_dim()
                 .or_else(|| panic!("Type error: NWire points to ZX"))
                 .unwrap();
             ZXOrDimOrEither::ZX(ACDCZX::NWire { n: dim.clone() })

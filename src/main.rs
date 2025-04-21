@@ -6,6 +6,7 @@ mod vyzxlemma;
 mod vyzxrules;
 mod conv;
 mod diff;
+mod recexpr;
 
 use crate::problems::*;
 use crate::serialize::SerFlatTermWrap;
@@ -19,20 +20,8 @@ use serde_derive::{Deserialize, Serialize};
 use std::cmp::max;
 
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    if args.contains(&"--version".to_string()) {
-        println!("0.0.1");
-        return;
-    }
-    let i : usize;
-    if args.len() == 2 {
-        i = args[1].parse().unwrap();
-    } else {
-        println!("Provide 1 arg!");
-        return;
-    }
-    eprintln!("--------Prob {}-----",i);
-    let json = all_problems()[i];
+
+    let json = attest();
     run_with_problem(json);
 }
 
@@ -162,6 +151,7 @@ fn simple_symbol(s: &str) -> ACDCDim {
     }
 }
 
+#[inline(always)]
 fn simple_lit(lit: i32) -> ACDCDim {
     ACDCDim::Lit { lit }
 }
