@@ -36,7 +36,7 @@ fn get_val_name(zx_dim: &ZXOrDimOrEither) -> String {
             ACDCDim::Symbol { symbol } => symbol,
             _ => panic!("Not a string"),
         }
-    };
+    }
 }
 
 fn recexpr_to_ACDC_at(rec_expr: &RecExpr<ACDC>, i: Id) -> ZXOrDimOrEither {

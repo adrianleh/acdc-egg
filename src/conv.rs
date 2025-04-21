@@ -8,7 +8,7 @@ macro_rules! acdc_to_binop_dim {
         let mut dims = vec![];
         for id in $ids {
             let node = $egraph.id_to_node(*id);
-            let dim = get_dim(&acdc_to_acdc_zx_or_dim(node, $egraph))
+            let dim = acdc_to_acdc_zx_or_dim(node, $egraph).get_dim()
                 .or_else(|| panic!("Type error: binop points to ZX"))
                 .unwrap();
             dims.push(dim);
@@ -25,7 +25,7 @@ macro_rules! acdc_to_binop_zx {
         let mut dims = vec![];
         for id in $ids {
             let node = $egraph.id_to_node(*id);
-            let dim = get_zx(&acdc_to_acdc_zx_or_dim(node, $egraph))
+            let dim = acdc_to_acdc_zx_or_dim(node, $egraph).get_zx()
                 .or_else(|| panic!("Type error: binop points to Dim"))
                 .unwrap();
             dims.push(dim);
@@ -41,7 +41,7 @@ macro_rules! acdc_to_binop_zx {
 macro_rules! acdc_to_dep {
     ($dep:ident,$id:ident,$egraph:ident) => {{
         let node = $egraph.id_to_node(*$id);
-        let zx = get_zx(&acdc_to_acdc_zx_or_dim(node, $egraph))
+        let zx = acdc_to_acdc_zx_or_dim(node, $egraph).get_zx()
             .or_else(|| panic!("Type error: Dep points to Dim"))
             .unwrap();
         ZXOrDimOrEither::Dim(ACDCDim::$dep { zx: Box::from(zx) })
@@ -53,7 +53,7 @@ macro_rules! acdc_to_spider {
         let mut dims = vec![];
         for id in $ids {
             let node = $egraph.id_to_node(*id);
-            let dim = get_dim(&acdc_to_acdc_zx_or_dim(node, $egraph))
+            let dim = acdc_to_acdc_zx_or_dim(node, $egraph).get_dim()
                 .or_else(|| panic!("Type error: spider points to ZX"))
                 .unwrap();
             dims.push(dim);
@@ -168,13 +168,13 @@ where
             let n = egraph.id_to_node(ids[0]);
             let m = egraph.id_to_node(ids[1]);
             let zx = egraph.id_to_node(ids[2]);
-            let n = &acdc_to_acdc_zx_or_dim(n, egraph).get_dim()
+            let n = acdc_to_acdc_zx_or_dim(n, egraph).get_dim()
                 .or_else(|| panic!("Type error: Cast n points to ZX"))
                 .unwrap();
-            let m = &acdc_to_acdc_zx_or_dim(m, egraph).get_dim()
+            let m = acdc_to_acdc_zx_or_dim(m, egraph).get_dim()
                 .or_else(|| panic!("Type error: Cast m points to ZX"))
                 .unwrap();
-            let zx = &acdc_to_acdc_zx_or_dim(zx, egraph).get_zx()
+            let zx = acdc_to_acdc_zx_or_dim(zx, egraph).get_zx()
                 .or_else(|| panic!("Type error: Cast zx points to Dim"))
                 .unwrap();
             ZXOrDimOrEither::ZX(ACDCZX::Cast {
@@ -193,7 +193,7 @@ where
             let mut dims = vec![];
             for id in ids {
                 let node = egraph.id_to_node(*id);
-                let dim = &acdc_to_acdc_zx_or_dim(node, egraph).get_dim()
+                let dim = acdc_to_acdc_zx_or_dim(node, egraph).get_dim()
                     .or_else(|| panic!("Type error: Val points to ZX"))
                     .unwrap();
                 dims.push(dim);
@@ -228,15 +228,15 @@ where
                 .map(|id| egraph.id_to_node(*id))
                 .map(|acdc| acdc_to_acdc_zx_or_dim(acdc, egraph))
                 .collect::<Vec<_>>();
-            let all_dims = (&args).iter().fold(true, |acc, arg| acc && is_dim(arg));
-            let zx_or_dim_args = (&args).iter().map(|arg| to_zx_or_dim(arg, false)).collect();
+            let all_dims = (&args).iter().fold(true, |acc, arg| acc && arg.is_dim());
+            let zx_or_dim_args = (&args).iter().map(|arg| arg.to_zx_or_dim(false)).collect();
             if (!all_dims) {
                 return ZXOrDimOrEither::ZX(ACDCZX::Fn {
                     fn_name: fn_name.to_string(),
                     args: zx_or_dim_args,
                 });
             }
-            let dim_args = (&args).iter().map(|arg| get_dim(arg).unwrap()).collect();
+            let dim_args = (&args).iter().map(|arg| arg.get_dim().unwrap()).collect();
             ZXOrDimOrEither::Either(
                 ACDCZX::Fn {
                     fn_name: fn_name.to_string(),

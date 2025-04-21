@@ -1,26 +1,26 @@
 mod conditioneqwrapper;
 mod conds;
-mod problems;
-mod serialize;
-mod vyzxlemma;
-mod vyzxrules;
 mod conv;
 mod diff;
+mod problems;
 mod recexpr;
+mod serialize;
+mod subtrees;
+mod vyzxlemma;
+mod vyzxrules;
 
 use crate::problems::*;
 use crate::serialize::SerFlatTermWrap;
-use crate::vyzxlemma::{acdczx_to_pattern, LemmaContainer};
+use crate::vyzxlemma::{LemmaContainer, acdczx_to_pattern};
 use crate::vyzxrules::{vyzx_rules, vyzx_rws};
 use egg::*;
-use serde::ser::SerializeStruct;
 use serde::Serialize as Ser;
 use serde::Serializer;
+use serde::ser::SerializeStruct;
 use serde_derive::{Deserialize, Serialize};
 use std::cmp::max;
 
 fn main() {
-
     let json = attest();
     run_with_problem(json);
 }
@@ -79,18 +79,37 @@ fn run_with_problem(json: &str) {
     let flat_explanations: Vec<_> = expl.make_flat_explanation().to_vec();
     let egraph = &runner.egraph;
     // eprintln!("Converting...");
-    let wrap_exprs: Vec<_> = flat_explanations
-        .iter()
-        .map(|ft| SerFlatTermWrap::from(ft.clone(), egraph, &lemmas))
-        .collect();
+    let mut wrap_exprs = vec![];
+    let get_first_enode = |id| egraph[id].nodes[0].clone();
+    let mut prev = runner
+        .egraph
+        .id_to_node(expr_id)
+        .build_recexpr(get_first_enode);
+    for ft in flat_explanations {
+        let curr = ft.clone().get_recexpr();
+        eprintln!("{:?}", ft.clone().node.clone());
+        wrap_exprs.push(SerFlatTermWrap::from(
+            prev.clone(),
+            curr.clone(),
+            ft.clone(),
+            egraph,
+            &lemmas,
+        ));
+        prev = curr.clone();
+    }
+    panic!("");
     let end_expl_time = std::time::Instant::now();
     println!("{}", serde_json::to_string_pretty(&wrap_exprs).unwrap());
 
-
+    eprintln!(
+        "Run time: {}ms",
+        end_time.duration_since(start_time).as_millis()
+    );
     eprintln!(
         "Explain time: {}ms",
         end_expl_time.duration_since(start_expl_time).as_millis()
-    );}
+    );
+}
 
 fn dim_rules<T>() -> Vec<Rewrite<ACDC, T>>
 where
@@ -111,7 +130,7 @@ where
     T: Analysis<ACDC>,
 {
     vec![
-        rewrite!("deps"; "?a"=> {ForceDepArgs{}}),
+        rewrite!("deps"; "?a"=> {ForceDepArgs{}}), // Forces a Dep1 and Dep2 for all ZX terms
         rewrite!("dep-n-val"; "(dep1 (val ?a ?b ?c))" => "?a"),
         rewrite!("dep-m-val"; "(dep2 (val ?a ?b ?c))" => "?b"),
         rewrite!("dep-n-nwire"; "(dep1 (n_wire ?a))" => "?a"),
@@ -122,19 +141,17 @@ where
         rewrite!("dep-m-x"; "(dep2 (X ?a ?b ?c))" => "?b"),
         rewrite!("dep-n-stack"; "(dep1 (stack ?a ?b))" => "(+ (dep1 ?a) (dep1 ?b))"),
         rewrite!("dep-m-stack"; "(dep2 (stack ?a ?b))" => "(+ (dep2 ?a) (dep2 ?b))"),
-        rewrite!("dep-n-compose"; "(dep1 (compose ?a ?b))" => "(dep1 ?a)"
-        ),
-        // if {
-        //             ConditionEqual::new(
-        //         "(dep2 ?a)".parse().unwrap(),
-        //         "(dep1 ?b)".parse().unwrap())
-        //         }
+        rewrite!("dep-n-compose"; "(dep1 (compose ?a ?b))" => "(dep1 ?a)"),
         rewrite!("dep-m-compose"; "(dep2 (compose ?a ?b))" => "(dep2 ?b)"),
         rewrite!("dep-n-cast"; "(dep1 (cast ?a ?b ?c))" => "(dep1 ?a)"),
         rewrite!("dep-m-cast"; "(dep2 (cast ?a ?b ?c))" => "(dep2 ?b)"),
     ]
 }
-
+// if {
+//             ConditionEqual::new(
+//         "(dep2 ?a)".parse().unwrap(),
+//         "(dep1 ?b)".parse().unwrap())
+//         }
 #[inline(always)]
 fn simple_var(s: &str) -> ACDCZX {
     ACDCZX::Val {
@@ -183,13 +200,17 @@ where
 // (datatype ZX (Cast ZX Dim Dim) (Stack ZX ZX) (Compose ZX ZX) (Val String Dim Dim) (Z Dim Dim Dim) (nWire Dim))
 define_language! {
     enum ACDC {
+        // nats
         Lit(i32),
         "+" = Add([Id; 2]),
         "-" = Sub([Id; 2]),
         "*" = Mul([Id; 2]),
+        // dep args
         "dep1" = Dep1(Id),
         "dep2" = Dep2(Id),
+        // nat or zx
         Var(Symbol),
+        // zx
         "cast" = Cast([Id; 3]),
         "stack" = Stack([Id; 2]),
         "compose" = Compose([Id; 2]),

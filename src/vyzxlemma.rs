@@ -2,7 +2,7 @@ use crate::conds::{
     AndCondition, ConditionEqualWrap, FalseCondition, TrueCondition, to_condition_equal,
 };
 use crate::{ACDC, ACDCDim, ACDCZX, Hyp, ZXOrDim, simple_var};
-use egg::{Analysis, ConditionalApplier, Language, Pattern, Rewrite, Symbol};
+use egg::{Analysis, ConditionalApplier, Language, Pattern, RecExpr, Rewrite, Symbol};
 use serde_derive::{Deserialize, Serialize};
 use std::any::Any;
 use std::cmp::PartialEq;
@@ -649,8 +649,8 @@ pub fn collect_dim_symbols(zx: &ACDCZX) -> HashSet<String> {
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MatchedZXParam {
-    matched: ACDCZX,
-    name: String,
+    pub matched: ACDCZX,
+    pub name: String,
 }
 #[derive(Debug, Clone)]
 pub struct Lemma<T>
@@ -665,14 +665,39 @@ where
     rewrites: Vec<Rewrite<ACDC, T>>,
 }
 
-impl<T> Lemma<T> where
-    T: Analysis<ACDC> + Clone + 'static + Debug
+impl<T> Lemma<T>
+where
+    T: Analysis<ACDC> + Clone + 'static + Debug,
 {
-    pub fn to_ordered_params(&self, params:&Vec<MatchedZXParam>) -> Vec<ACDCZX> {
+    pub fn get_rewrites(&self) -> Vec<Rewrite<ACDC, T>> {
+        self.rewrites.clone()
+    }
+    pub fn get_rewrites_ref(&self) -> &Vec<Rewrite<ACDC, T>> {
+        &self.rewrites
+    }
+
+    pub fn get_params_and_side(&self, node: &ACDCZX) -> (Vec<MatchedZXParam>, bool) {
+        let lp = get_params_from_lemma(node, self.lhs.deref(), &self.params);
+        if lp.is_ok() {
+            return (lp.unwrap(), false);
+        }
+        let rp = get_params_from_lemma(node, self.rhs.deref(), &self.params);
+        (rp.unwrap_or_else(|x| panic!("{}", x)), true)
+    }
+    pub fn get_params(&self, node: &ACDCZX) -> Vec<MatchedZXParam> {
+        self.get_params_and_side(node).0
+    }
+
+    fn get_param_map(params: &Vec<MatchedZXParam>) -> HashMap<String, ACDCZX> {
         let mut map = HashMap::new();
         for param in params {
             map.insert(param.name.clone(), param.matched.clone());
         }
+        map
+    }
+
+    pub fn to_ordered_params(&self, params: &Vec<MatchedZXParam>) -> Vec<ACDCZX> {
+        let map = Self::get_param_map(params);
         let mut ret = vec![];
         for param in &self.params {
             if !map.contains_key(&param.name) {
@@ -683,18 +708,81 @@ impl<T> Lemma<T> where
         }
         ret
     }
+
+    pub fn build_subtree_from_application(&self, node: &ACDCZX) -> ACDCZX {
+        let (params, rhs) = self.get_params_and_side(node);
+        let base = if rhs {
+            self.lhs.clone()
+        } else {
+            self.rhs.clone()
+        };
+        let map = Self::get_param_map(&params);
+        eprintln!(
+            "Building subtree with args {}...",
+            map.iter()
+                .map(|(k, _)| k.clone().to_string())
+                .collect::<Vec<String>>()
+                .join(", ")
+        );
+        // eprintln!("On node: \n{:?}\n00000000000000000000000", node);
+        fn build_subtree_helper(acdc: &ACDCZX, params: &HashMap<String, ACDCZX>) -> ACDCZX {
+            match acdc {
+                ACDCZX::Cast { n, m, zx } => ACDCZX::Cast {
+                    n: n.clone(),
+                    m: m.clone(),
+                    zx: Box::from(build_subtree_helper(&zx.clone(), params)),
+                },
+                ACDCZX::Val { n, m, val } => {
+                    if params.contains_key(val) {
+                        params.get(val).unwrap().clone()
+                    } else {
+                        ACDCZX::Val {
+                            n: n.clone(),
+                            m: m.clone(),
+                            val: val.clone(),
+                        }
+                    }
+                }
+                ACDCZX::Compose { a, b } => ACDCZX::Compose {
+                    a: Box::from(build_subtree_helper(&a.clone(), params)),
+                    b: Box::from(build_subtree_helper(&b.clone(), params)),
+                },
+                ACDCZX::Stack { a, b } => ACDCZX::Stack {
+                    a: Box::from(build_subtree_helper(&a.clone(), params)),
+                    b: Box::from(build_subtree_helper(&b.clone(), params)),
+                },
+                ACDCZX::Fn { fn_name, args } => {
+                    let map_zx_or_dim = |zxordim: &ZXOrDim| -> ZXOrDim {
+                        match zxordim {
+                            ZXOrDim::Dim(dim) => ZXOrDim::Dim(dim.clone()),
+                            ZXOrDim::ZX(zx) => {
+                                ZXOrDim::ZX(build_subtree_helper(&zx.clone(), params))
+                            }
+                        }
+                    };
+                    let args = args.iter().map(map_zx_or_dim).collect();
+                    ACDCZX::Fn {
+                        fn_name: fn_name.clone(),
+                        args,
+                    }
+                }
+                _ => acdc.clone(),
+            }
+        }
+        build_subtree_helper(&base.clone(), &map)
+    }
 }
 
 macro_rules! found_var {
     ($param_names:ident,$val:ident,$x:ident) => {
         if $param_names.contains($val) {
-                Ok(vec![MatchedZXParam {
-                    matched: $x.clone(),
-                    name: $val.clone(),
-                }])
-            } else {
-                Ok(vec![])
-            }
+            Ok(vec![MatchedZXParam {
+                matched: $x.clone(),
+                name: $val.clone(),
+            }])
+        } else {
+            Ok(vec![])
+        }
     };
 }
 
@@ -707,7 +795,7 @@ fn get_params_from_lemma(
     params.iter().for_each(|param| {
         param_names.insert(param.name.clone());
     });
-    eprintln!("{:?}\n-----\n{:?}", lemma_zx, matched);
+    // eprintln!("{:?}\n-----\n{:?}", lemma_zx, matched);
     match (lemma_zx, matched) {
         (ACDCZX::Val { val, n, m }, r) => {
             found_var!(param_names, val, r)
@@ -801,28 +889,10 @@ fn get_params_from_lemma(
             if std::mem::discriminant(l) == std::mem::discriminant(r) {
                 Ok(vec![])
             } else {
-                eprintln!("Mismatch: {:?} - {:?}", l, r);
+                eprintln!("Mismatch:\n{:?}\n{:?}\n--------", l, r);
                 Err("Found mismatch. Why did this match?".to_string())
             }
         }
-    }
-}
-
-impl<T> Lemma<T>
-where
-    T: Analysis<ACDC> + Clone + 'static + Debug,
-{
-    pub fn get_rewrites(&self) -> Vec<Rewrite<ACDC, T>> {
-        self.rewrites.clone()
-    }
-    pub fn get_rewrites_ref(&self) -> &Vec<Rewrite<ACDC, T>> {
-        &self.rewrites
-    }
-
-    pub fn get_params(&self, node: &ACDCZX) -> Vec<MatchedZXParam> {
-        get_params_from_lemma(node, self.lhs.deref(), &self.params)
-            .or(get_params_from_lemma(node, self.rhs.deref(), &self.params))
-            .unwrap_or_else(|x| panic!("{}", x))
     }
 }
 
@@ -960,6 +1030,19 @@ where
         self.lemmas.get(name).cloned()
     }
 
+    pub fn get_match_side_args(
+        &self,
+        name: &String,
+        candidate: &ACDCZX,
+    ) -> Option<(Vec<MatchedZXParam>, bool)> {
+        let lemma = self.get(name);
+        if (&lemma).is_none() {
+            return None;
+        }
+        let lemma = lemma.unwrap();
+        Some(lemma.get_params_and_side(candidate))
+    }
+
     pub fn get_match_args(&self, name: &String, candidate: &ACDCZX) -> Option<Vec<MatchedZXParam>> {
         let lemma = self.get(name);
         if (&lemma).is_none() {
@@ -971,4 +1054,8 @@ where
     }
 }
 
+fn from_rec_expr(rec: RecExpr<ACDC>){
+    for node in rec.iter() {
 
+    }
+}
