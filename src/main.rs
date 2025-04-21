@@ -87,7 +87,7 @@ fn run_with_problem(json: &str) {
         .build_recexpr(get_first_enode);
     for ft in flat_explanations {
         let curr = ft.clone().get_recexpr();
-        eprintln!("{:?}", ft.clone().node.clone());
+        eprintln!("{:?}", curr.clone());
         wrap_exprs.push(SerFlatTermWrap::from(
             prev.clone(),
             curr.clone(),
@@ -97,7 +97,6 @@ fn run_with_problem(json: &str) {
         ));
         prev = curr.clone();
     }
-    panic!("");
     let end_expl_time = std::time::Instant::now();
     println!("{}", serde_json::to_string_pretty(&wrap_exprs).unwrap());
 

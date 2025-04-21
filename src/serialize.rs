@@ -191,7 +191,6 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> SerFlatTermWrap<'a, A> {
         egraph: &'a EGraph<ACDC, A>,
         lemmas: &'a LemmaContainer<A>,
     ) -> Self {
-        let re = flat_term.get_recexpr();
         SerFlatTermWrap { prev_top,curr_top, term: flat_term, egraph, container: lemmas}
     }
 
@@ -265,7 +264,7 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
             }
         }
         state.serialize_field("arguments", &arguments)?;
-        state.serialize_field("node", &acdc_to_acdc_zx_or_dim(&self.term.node, self.egraph))?;
+        state.serialize_field("node", &recexpr_to_ACDC(&self.curr_top).get_zx())?;
         state.serialize_field("at", &at)?;
         state.end()
     }

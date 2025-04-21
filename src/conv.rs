@@ -230,7 +230,7 @@ where
                 .collect::<Vec<_>>();
             let all_dims = (&args).iter().fold(true, |acc, arg| acc && arg.is_dim());
             let zx_or_dim_args = (&args).iter().map(|arg| arg.to_zx_or_dim(false)).collect();
-            if (!all_dims) {
+            if !all_dims {
                 return ZXOrDimOrEither::ZX(ACDCZX::Fn {
                     fn_name: fn_name.to_string(),
                     args: zx_or_dim_args,
