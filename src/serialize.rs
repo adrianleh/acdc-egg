@@ -332,3 +332,29 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
         state.end()
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct ACDCResult<'a, T> where T: Analysis<ACDC> + Clone + Debug + 'static {
+    expl: Vec<SerFlatTermWrap<'a, T>>,
+    expl_time : u64,
+    saturation_time : u64,
+}
+
+impl<'a, T: Analysis<ACDC> + Clone + Debug + 'static> ACDCResult<'a, T> {
+    pub fn new(expl: Vec<SerFlatTermWrap<'a, T>>, expl_time: u64, saturation_time: u64) -> Self {
+        ACDCResult { expl, expl_time, saturation_time }
+    }
+}
+
+impl<'a, T: Analysis<ACDC> + Clone + Debug + 'static> Ser for ACDCResult<'a, T>  {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("Result", 3)?;
+        state.serialize_field("expl", &self.expl)?;
+        state.serialize_field("expl_time", &self.expl_time)?;
+        state.serialize_field("saturation_time", &self.saturation_time)?;
+        state.end()
+    }
+}

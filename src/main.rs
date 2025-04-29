@@ -1,3 +1,6 @@
+extern crate alloc;
+extern crate core;
+
 mod conditioneqwrapper;
 mod conds;
 mod conv;
@@ -9,17 +12,21 @@ mod subtrees;
 mod vyzxlemma;
 mod vyzxrules;
 
-use crate::problems::*;
-use crate::serialize::SerFlatTermWrap;
-use crate::vyzxlemma::{LemmaContainer, acdczx_to_pattern};
+use crate::serialize::{ACDCResult, SerFlatTermWrap};
+use crate::vyzxlemma::{acdczx_to_pattern, LemmaContainer};
 use crate::vyzxrules::{vyzx_rules, vyzx_rws};
+use alloc::string::String;
+use core::fmt::Debug;
 use egg::*;
 use serde_derive::{Deserialize, Serialize};
 use std::cmp::max;
+use std::io;
+use std::io::Read;
 
 fn main() {
-    let json = attest();
-    run_with_problem(json);
+    let mut json = String::new();
+    io::stdin().read_to_string(&mut json).unwrap_or_else(|_| panic!("Failed to read input json")); // Read from stdin until EOF
+    run_with_problem(json.as_str());
 }
 
 fn run_with_problem(json: &str) {
@@ -95,7 +102,12 @@ fn run_with_problem(json: &str) {
         prev = curr.clone();
     }
     let end_expl_time = std::time::Instant::now();
-    println!("{}", serde_json::to_string_pretty(&wrap_exprs).unwrap());
+    let result = ACDCResult::new(
+        wrap_exprs.clone(),
+        end_expl_time.duration_since(start_expl_time).as_millis() as u64,
+        end_time.duration_since(start_time).as_millis() as u64,
+    );
+    println!("{}", serde_json::to_string_pretty(&result).unwrap());
 
     eprintln!(
         "Run time: {}ms",
