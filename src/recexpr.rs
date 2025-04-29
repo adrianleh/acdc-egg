@@ -26,6 +26,7 @@ macro_rules! binop_to_zx {
 }
 
 fn get_val_name(zx_dim: &ZXOrDimOrEither) -> String {
+    eprint!("{:?}", zx_dim);
     if zx_dim.is_zx() {
         match zx_dim.get_zx().unwrap() {
             ACDCZX::Val { val, n: _, m: _ } => val,
@@ -86,7 +87,7 @@ fn recexpr_to_ACDC_at(rec_expr: &RecExpr<ACDC>, i: Id) -> ZXOrDimOrEither {
         ACDC::Compose([a, b]) => {
             binop_to_zx!(Compose, rec_expr, a, b)
         }
-        ACDC::Val([n, m, s]) => {
+        ACDC::Val([s, n, m]) => {
             let n = recexpr_to_ACDC_at(rec_expr, *n).get_dim().unwrap();
             let m = recexpr_to_ACDC_at(rec_expr, *m).get_dim().unwrap();
             let s = recexpr_to_ACDC_at(rec_expr, *s);
@@ -140,5 +141,5 @@ fn recexpr_to_ACDC_at(rec_expr: &RecExpr<ACDC>, i: Id) -> ZXOrDimOrEither {
     }
 }
 pub fn recexpr_to_ACDC(rec_expr: &RecExpr<ACDC>) -> ZXOrDimOrEither {
-    recexpr_to_ACDC_at(rec_expr, Id::from(0))
+    recexpr_to_ACDC_at(rec_expr, Id::from(rec_expr.len() - 1)) // Rec exprs are built left to right, meaning the last index is the global term
 }

@@ -1,21 +1,60 @@
 use crate::ACDC;
-use crate::vyzxlemma::LemmaContainer;
+use crate::conv::acdc_to_acdc_zx_or_dim;
+use crate::recexpr::recexpr_to_ACDC;
+use crate::subtrees::rewrite_at_idx;
+use crate::vyzxlemma::{LemmaContainer, REVERSE_LEMMA_SUFFIX};
 use egg::{Analysis, EGraph, FlatTerm, Language, RecExpr};
-use crate::conv::{acdc_to_acdc_zx_or_dim};
-use serde::ser::SerializeStruct;
 use serde::Serialize as Ser;
 use serde::Serializer;
+use serde::ser::SerializeStruct;
 use std::fmt::Debug;
-use crate::recexpr::{recexpr_to_ACDC};
-use crate::subtrees::rewrite_at_idx;
+use serde_derive::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+enum Direction {
+    Forward,
+    Backward,
+}
+
+impl Direction {
+    // A method callable on the enum
+    fn invert(&self) -> Direction {
+        match self {
+            Direction::Forward => Direction::Backward,
+            Direction::Backward => Direction::Forward,
+        }
+    }
+
+    fn invert_if(&self, condition: bool) -> Direction {
+        if condition {
+            self.invert()
+        } else {
+            self.clone()
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct Proof {
+    name: String,
+    direction: Direction,
+}
+impl Proof {
+    pub fn new(name: String, direction: Direction) -> Self {
+        Proof {
+            name: name.clone(),
+            direction: direction.invert_if(name.ends_with(REVERSE_LEMMA_SUFFIX)),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct SerFlatTermWrap<'a, A: Analysis<ACDC> + Clone + Debug + 'static> {
     prev_top: RecExpr<ACDC>,
     curr_top: RecExpr<ACDC>,
-    term : FlatTerm<ACDC>,
-    egraph: & 'a EGraph<ACDC, A>,
-    container: & 'a LemmaContainer<A>,
+    term: FlatTerm<ACDC>,
+    egraph: &'a EGraph<ACDC, A>,
+    container: &'a LemmaContainer<A>,
 }
 
 #[derive(Debug, Clone)]
@@ -191,28 +230,48 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> SerFlatTermWrap<'a, A> {
         egraph: &'a EGraph<ACDC, A>,
         lemmas: &'a LemmaContainer<A>,
     ) -> Self {
-        SerFlatTermWrap { prev_top,curr_top, term: flat_term, egraph, container: lemmas}
+        SerFlatTermWrap {
+            prev_top,
+            curr_top,
+            term: flat_term,
+            egraph,
+            container: lemmas,
+        }
     }
 
     pub fn children(&self) -> Vec<SerFlatTermWrap<A>> {
         self.term
             .children
             .iter()
-            .map(|ft| SerFlatTermWrap::from(self.prev_top.clone(),self.curr_top.clone(), ft.clone(),self.egraph,self.container ))
+            .map(|ft| {
+                SerFlatTermWrap::from(
+                    self.prev_top.clone(),
+                    self.curr_top.clone(),
+                    ft.clone(),
+                    self.egraph,
+                    self.container,
+                )
+            })
             .collect()
     }
 
-    fn contains_proof(&self) -> bool {
-        self.term.forward_rule.is_some()
-            || self.term.backward_rule.is_some()
-            || self.children().iter().any(|child| child.contains_proof())
-    }
-
-    pub fn non_empty_children(&self) -> Vec<SerFlatTermWrap<A>> {
-        self.children()
-            .into_iter()
-            .filter(|child| child.contains_proof())
-            .collect::<Vec<_>>()
+    fn get_proof(&self) -> Option<Proof> {
+        if self.term.forward_rule.is_some() {
+            Some(Proof::new(
+                self.term.forward_rule?.to_string(),
+                Direction::Forward,
+            ))
+        } else if self.term.backward_rule.is_some() {
+            Some(Proof::new(
+                self.term.backward_rule?.to_string(),
+                Direction::Backward,
+            ))
+        } else {
+            self.children()
+                .iter()
+                .flat_map(|c| c.get_proof()) // turn children into an iterator of Option<Proof>
+                .next() // get the first non-None proof
+        }
     }
 }
 
@@ -225,18 +284,13 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
     {
         let fwd_rule = &self.term.forward_rule.map(|x| x.to_string());
         let bwd_rule = &self.term.backward_rule.map(|x| x.to_string());
-        if !self.contains_proof() {
-            let state = serializer.serialize_struct("SerFlatTermWrap", 0)?;
-            return state.end();
-        }
-        let mut state = serializer.serialize_struct("SerFlatTermWrap", 5)?;
-        state.serialize_field("backward_rule", bwd_rule)?;
-        state.serialize_field("forward_rule", fwd_rule)?;
-        state.serialize_field("children", &self.non_empty_children())?;
+        let mut state = serializer.serialize_struct("SerFlatTermWrap", 4)?;
+        let proof = self.get_proof();
+        state.serialize_field("proof", &proof)?;
         let mut arguments = vec![];
         let mut at = None;
-        if bwd_rule.is_some() || fwd_rule.is_some() {
-            let rule_name = bwd_rule.clone().or_else(|| fwd_rule.clone()).unwrap();
+        if proof.is_some() {
+            let rule_name = proof.unwrap().name;
             let acdc = &self.term.node;
             let acdczx = acdc_to_acdc_zx_or_dim(acdc, self.egraph);
             let prev = recexpr_to_ACDC(&self.prev_top);
@@ -249,17 +303,26 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
                 let acdczx = &acdczx.get_zx().unwrap();
                 let (raw_args, rhs) = self
                     .container
-                    .get_match_side_args(&rule_name,&acdczx )
+                    .get_match_side_args(&rule_name, &acdczx)
                     .or_else(|| Some((vec![], false)))
                     .unwrap();
-                let lemma=self.container.get(&rule_name);
+                let lemma = self.container.get(&rule_name);
                 if let Some(lemma) = lemma {
-                    arguments= lemma.to_ordered_params(&raw_args);
-                    eprintln!("Raw args: {}",raw_args.iter().map(|p|p.clone().name).collect::<Vec<_>>().join(","));
+                    arguments = lemma.to_ordered_params(&raw_args);
+                    eprintln!(
+                        "Raw args: {}",
+                        raw_args
+                            .iter()
+                            .map(|p| p.clone().name)
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    );
                     let subtree = lemma.build_subtree_from_application(&acdczx);
                     eprintln!("Rewrite at idx for {}", rule_name);
                     let (idx, has_idx) = rewrite_at_idx(&prev, &new, &subtree);
-                    if has_idx { at = Some(idx); }
+                    if has_idx {
+                        at = Some(idx);
+                    }
                 }
             }
         }
