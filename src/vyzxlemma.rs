@@ -1,6 +1,8 @@
 use crate::conds::{
     AndCondition, ConditionEqualWrap, FalseCondition, TrueCondition, to_condition_equal,
 };
+use crate::serialize::Direction::Forward;
+use crate::serialize::Proof;
 use crate::{ACDC, ACDCDim, ACDCZX, Hyp, ZXOrDim, simple_var};
 use egg::{Analysis, ConditionalApplier, Language, Pattern, RecExpr, Rewrite, Symbol};
 use serde_derive::{Deserialize, Serialize};
@@ -562,7 +564,7 @@ pub fn acdczx_to_pattern(zx: &ACDCZX) -> String {
             acdczx_to_pattern(a),
             acdczx_to_pattern(b)
         ),
-        ACDCZX::NWire { n } => format!("(n_wire {})", to_acdc_expr(n)),
+        ACDCZX::NWire { n } => format!("(nwire {})", to_acdc_expr(n)),
         ACDCZX::Stack { a, b } => {
             format!("(stack {} {})", acdczx_to_pattern(a), acdczx_to_pattern(b))
         }
@@ -673,16 +675,21 @@ where
         &self.rewrites
     }
 
-    pub fn get_params_and_side(&self, node: &ACDCZX) -> (Vec<MatchedZXParam>, bool) {
-        let lp = get_params_from_lemma(node, self.lhs.deref(), &self.params);
-        if lp.is_ok() {
-            return (lp.unwrap(), false);
+    pub fn get_params_and_side(&self, node: &ACDCZX, lhs: bool) -> (Vec<MatchedZXParam>, bool) {
+        eprintln!("PARAMS: {:?}", self.params);
+        if (self.params.len() == 0) {
+            eprintln!("No params, returning empty vec");
+            return (vec![], lhs);
         }
+        if lhs {
+            eprintln!("Getting params for lhs : {:?}", self.lhs);
+            let lp = get_params_from_lemma(node, self.lhs.deref(), &self.params);
+            eprintln!("LHS params: {:?}", lp);
+            return (lp.unwrap_or_else(|x| panic!("{}", x)), false);
+        }
+        eprintln!("Getting params for rhs : {:?}", self.rhs);
         let rp = get_params_from_lemma(node, self.rhs.deref(), &self.params);
         (rp.unwrap_or_else(|x| panic!("{}", x)), true)
-    }
-    pub fn get_params(&self, node: &ACDCZX) -> Vec<MatchedZXParam> {
-        self.get_params_and_side(node).0
     }
 
     fn get_param_map(params: &Vec<MatchedZXParam>) -> HashMap<String, ACDCZX> {
@@ -696,6 +703,10 @@ where
     pub fn to_ordered_params(&self, params: &Vec<MatchedZXParam>) -> Vec<ACDCZX> {
         let map = Self::get_param_map(params);
         let mut ret = vec![];
+        eprintln!(
+            "Building ordered params from map: {:?} and params: {:?}",
+            map, self.params
+        );
         for param in &self.params {
             if !map.contains_key(&param.name) {
                 continue;
@@ -706,8 +717,8 @@ where
         ret
     }
 
-    pub fn build_subtree_from_application(&self, node: &ACDCZX) -> ACDCZX {
-        let (params, rhs) = self.get_params_and_side(node);
+    pub fn build_subtree_from_application(&self, node: &ACDCZX, rhs: bool) -> ACDCZX {
+        let (params, rhs) = self.get_params_and_side(node, !rhs);
         let base = if rhs {
             self.lhs.clone()
         } else {
@@ -794,10 +805,48 @@ fn get_params_from_lemma(
     });
     // eprintln!("{:?}\n-----\n{:?}", lemma_zx, matched);
     match (lemma_zx, matched) {
+        (
+            ACDCZX::Val {
+                val: val1,
+                n: n1,
+                m: m1,
+            },
+            ACDCZX::Val {
+                val: val2,
+                n: n2,
+                m: m2,
+            },
+        ) => {
+            // Case if a variable matches another variable
+            let l = ACDCZX::Val {
+                val: val1.clone(),
+                n: n1.clone(),
+                m: m1.clone(),
+            };
+            let r = ACDCZX::Val {
+                val: val2.clone(),
+                n: n2.clone(),
+                m: m2.clone(),
+            };
+            if param_names.contains(val1) {
+                Ok(vec![MatchedZXParam {
+                    matched: r,
+                    name: val1.clone(),
+                }])
+            } else if param_names.contains(val2) {
+                Ok(vec![MatchedZXParam {
+                    matched: l,
+                    name: val2.clone(),
+                }])
+            } else {
+                Ok(vec![])
+            }
+        }
         (ACDCZX::Val { val, n, m }, r) => {
             found_var!(param_names, val, r)
         }
         (l, ACDCZX::Val { val, n, m }) => {
+            eprintln!("{:?} matched to {:?}", val, l);
             found_var!(param_names, val, l)
         }
         (ACDCZX::Stack { a: a1, b: b1 }, ACDCZX::Stack { a: a2, b: b2 }) => {
@@ -839,12 +888,7 @@ fn get_params_from_lemma(
                 m: m2,
                 zx: zx2,
             },
-        ) => {
-            // if n1 != n2 || m1 != m2 {
-            //     return Err("Cast arg mismatch".to_string());
-            // }
-            get_params_from_lemma(zx1, zx2, params)
-        }
+        ) => get_params_from_lemma(zx1, zx2, params),
         (
             ACDCZX::Fn {
                 fn_name: fn_name1,
@@ -1029,30 +1073,25 @@ where
 
     pub fn get_match_side_args(
         &self,
-        name: &String,
+        prf: &Proof,
         candidate: &ACDCZX,
     ) -> Option<(Vec<MatchedZXParam>, bool)> {
-        let lemma = self.get(name);
+        let lemma = self.get(&prf.name);
         if (&lemma).is_none() {
             return None;
         }
         let lemma = lemma.unwrap();
-        Some(lemma.get_params_and_side(candidate))
-    }
-
-    pub fn get_match_args(&self, name: &String, candidate: &ACDCZX) -> Option<Vec<MatchedZXParam>> {
-        let lemma = self.get(name);
-        if (&lemma).is_none() {
-            return None;
+        eprintln!(
+            "Looking for lemma {} ({:?}) in {}",
+            prf.name, prf.direction, lemma.name
+        );
+        if prf.name == "nwire_removal_l" {
+            eprintln!("Found nwire_removal_l, returning params");
         }
-        let lemma = lemma.unwrap();
-        let params = lemma.get_params(candidate);
-        Some(params)
+        Some(lemma.get_params_and_side(candidate, prf.direction != Forward))
     }
 }
 
-fn from_rec_expr(rec: RecExpr<ACDC>){
-    for node in rec.iter() {
-
-    }
+fn from_rec_expr(rec: RecExpr<ACDC>) {
+    for node in rec.iter() {}
 }

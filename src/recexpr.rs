@@ -26,7 +26,6 @@ macro_rules! binop_to_zx {
 }
 
 fn get_val_name(zx_dim: &ZXOrDimOrEither) -> String {
-    eprint!("{:?}", zx_dim);
     if zx_dim.is_zx() {
         match zx_dim.get_zx().unwrap() {
             ACDCZX::Val { val, n: _, m: _ } => val,

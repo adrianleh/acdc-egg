@@ -1,6 +1,7 @@
 use crate::ACDC;
 use crate::conv::acdc_to_acdc_zx_or_dim;
 use crate::recexpr::recexpr_to_ACDC;
+use crate::serialize::Direction::{Backward, Forward};
 use crate::subtrees::rewrite_at_idx;
 use crate::vyzxlemma::{LemmaContainer, REVERSE_LEMMA_SUFFIX};
 use egg::{Analysis, EGraph, FlatTerm, Language, RecExpr};
@@ -290,7 +291,7 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
         let mut arguments = vec![];
         let mut at = None;
         if proof.is_some() {
-            let rule_name = proof.unwrap().name;
+            let rule_name = &proof.clone().unwrap().name;
             let acdc = &self.term.node;
             let acdczx = acdc_to_acdc_zx_or_dim(acdc, self.egraph);
             let prev = recexpr_to_ACDC(&self.prev_top);
@@ -300,9 +301,10 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
                 let new = new.get_zx().unwrap();
                 if acdczx.is_zx() {
                     let acdczx = &acdczx.get_zx().unwrap();
-                    let (raw_args, rhs) = self
+                    eprintln!("Getting proof args for {:?} on {:?}", proof.clone().unwrap(), acdczx);
+                    let (raw_args, _) = self
                         .container
-                        .get_match_side_args(&rule_name, &acdczx)
+                        .get_match_side_args(&proof.clone().unwrap(), &acdczx)
                         .or_else(|| Some((vec![], false)))
                         .unwrap();
                     let lemma = self.container.get(&rule_name);
@@ -316,7 +318,10 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
                                 .collect::<Vec<_>>()
                                 .join(",")
                         );
-                        let subtree = lemma.build_subtree_from_application(&acdczx);
+                        let subtree = lemma.build_subtree_from_application(
+                            &acdczx,
+                            proof.unwrap().direction != Backward,
+                        );
                         eprintln!("Rewrite at idx for {}", rule_name);
                         let (idx, has_idx) = rewrite_at_idx(&prev, &new, &subtree);
                         if has_idx {
