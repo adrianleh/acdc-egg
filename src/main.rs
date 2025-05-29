@@ -12,8 +12,8 @@ mod subtrees;
 mod vyzxlemma;
 mod vyzxrules;
 
-use crate::serialize::{ACDCResult, SerFlatTermWrap};
-use crate::vyzxlemma::{acdczx_to_pattern, LemmaContainer};
+use crate::serialize::{ACDCResult, Direction, Proof, SerFlatTermWrap};
+use crate::vyzxlemma::{LemmaContainer, acdczx_to_pattern};
 use crate::vyzxrules::{vyzx_rules, vyzx_rws};
 use alloc::string::String;
 use core::fmt::Debug;
@@ -22,11 +22,24 @@ use serde_derive::{Deserialize, Serialize};
 use std::cmp::max;
 use std::io;
 use std::io::Read;
+use std::process::exit;
 
+const TEST_STRING: &str = "@@@@@@@test@@@@@@@";
 fn main() {
-    let mut json = String::new();
-    io::stdin().read_to_string(&mut json).unwrap_or_else(|_| panic!("Failed to read input json")); // Read from stdin until EOF
-    run_with_problem(json.as_str());
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() > 1 && args[1] == "--version" {
+        println!("0.0.1");
+        return;
+    }
+    let mut input = String::new();
+    io::stdin()
+        .read_to_string(&mut input)
+        .unwrap_or_else(|_| panic!("Failed to read input json")); // Read from stdin until EOF
+    if input.trim() == TEST_STRING {
+        println!("Success!");
+        return;
+    }
+    run_with_problem(input.as_str());
 }
 
 fn run_with_problem(json: &str) {
@@ -80,15 +93,40 @@ fn run_with_problem(json: &str) {
     let mut expl = runner.explain_equivalence(&expr, &goal);
     eprintln!("size {}", expl.get_tree_size());
     // eprintln!("Flattening...");
-    let flat_explanations: Vec<_> = expl.make_flat_explanation().to_vec();
-    let egraph = &runner.egraph;
     // eprintln!("Converting...");
     let mut wrap_exprs = vec![];
-    let get_first_enode = |id| egraph[id].nodes[0].clone();
+    let get_first_enode = |id| (&runner).egraph[id].nodes[0].clone();
+
+    // let n0 = runner.egraph.id_to_node(Id::from(0)).build_recexpr(get_first_enode);
+    // let n4 = runner.egraph.id_to_node(Id::from(4)).build_recexpr(get_first_enode);
+    // eprintln!("n0, n4: {:?} {:?}", n0, n4);
+    // let mut expl2 = runner.explain_equivalence(&n0, &n4);
+    // eprintln!("expl2 l: {:}", expl2.get_tree_size());
+    // let fe2 = expl2.make_flat_explanation();
+    // let fe2profs = fe2.iter().map(|x| {
+    //     let serfe2 = SerFlatTermWrap::from(
+    //         n0.clone(),
+    //         n4.clone(),
+    //         fe2[1].clone(),
+    //         &runner.egraph,
+    //         &lemmas,
+    //     );
+    //     serfe2.get_proof().unwrap().name
+    // }).collect::<Vec<_>>();
+    // eprintln!("FE2: {:}", serde_json::to_string_pretty(&fe2profs).unwrap());
+    // exit(1);
+
+    let flat_explanations: Vec<_> = expl.make_flat_explanation().to_vec();
+    eprintln!("flat_explanations size: {:}", flat_explanations.len());
+    let egraph = &runner.egraph;
+    eprintln!("prev node : {:?}", &egraph.id_to_node(expr_id));
+    eprintln!("prev node 4: {:?}", &egraph.id_to_node(4.into()));
+    eprintln!("prev node 0: {:?}", &egraph.id_to_node(0.into()));
     let mut prev = runner
         .egraph
         .id_to_node(expr_id)
         .build_recexpr(get_first_enode);
+    eprintln!("prev: {:?}", prev);
     for ft in flat_explanations {
         let curr = ft.clone().get_recexpr();
         eprintln!("{:?}", curr.clone());
@@ -141,8 +179,8 @@ where
         rewrite!("deps"; "?a"=> {ForceDepArgs{}}), // Forces a Dep1 and Dep2 for all ZX terms
         rewrite!("dep-n-val"; "(dep1 (val ?a ?b ?c))" => "?a"),
         rewrite!("dep-m-val"; "(dep2 (val ?a ?b ?c))" => "?b"),
-        rewrite!("dep-n-nwire"; "(dep1 (n_wire ?a))" => "?a"),
-        rewrite!("dep-m-nwire"; "(dep2 (n_wire ?a))" => "?a"),
+        rewrite!("dep-n-nwire"; "(dep1 (nwire ?a))" => "?a"),
+        rewrite!("dep-m-nwire"; "(dep2 (nwire ?a))" => "?a"),
         rewrite!("dep-n-z"; "(dep1 (Z ?a ?b ?c))" => "?a"),
         rewrite!("dep-m-z"; "(dep2 (Z ?a ?b ?c))" => "?b"),
         rewrite!("dep-n-x"; "(dep1 (X ?a ?b ?c))" => "?a"),
@@ -165,6 +203,15 @@ fn simple_var(s: &str) -> ACDCZX {
     ACDCZX::Val {
         n: None,
         m: None,
+        val: s.to_string(),
+    }
+}
+
+#[inline(always)]
+fn simple_var_sized(s: &str, n: i32, m : i32) -> ACDCZX {
+    ACDCZX::Val {
+        n: Some(simple_lit(n)),
+        m: Some(simple_lit(m)),
         val: s.to_string(),
     }
 }
@@ -225,7 +272,7 @@ define_language! {
         "val" = Val([Id; 3]),
         "Z" = Z([Id; 3]),
         "X" = X([Id; 3]),
-        "n_wire" = NWire(Id),
+        "nwire" = NWire(Id),
         Fn(Symbol, Vec<Id>),
     }
 }
@@ -372,7 +419,7 @@ pub enum ACDCZX {
     Stack { a: Box<ACDCZX>, b: Box<ACDCZX> },
     #[serde(rename = "compose")]
     Compose { a: Box<ACDCZX>, b: Box<ACDCZX> },
-    #[serde(rename = "n_wire")]
+    #[serde(rename = "nwire")]
     NWire { n: ACDCDim },
     #[serde(rename = "fn")]
     Fn {

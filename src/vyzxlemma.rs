@@ -545,9 +545,9 @@ pub fn acdczx_to_pattern(zx: &ACDCZX) -> String {
             } else {
                 format!(
                     "(val {} {} {})",
-                    s,
                     to_acdc_expr(&n.clone().unwrap()),
-                    to_acdc_expr(&m.clone().unwrap())
+                    to_acdc_expr(&m.clone().unwrap()),
+                    s
                 )
             }
         }

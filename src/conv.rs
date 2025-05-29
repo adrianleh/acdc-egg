@@ -199,13 +199,13 @@ where
                 dims.push(dim);
             }
             assert_eq!(dims.len(), 3);
-            let val = match &dims[0] {
+            let val = match &dims[2] {
                 ACDCDim::Symbol { symbol } => { symbol.clone() }
                 _ => "_".to_string()
             };
             ZXOrDimOrEither::ZX(ACDCZX::Val {
-                n: Some(dims[1].clone()),
-                m: Some(dims[2].clone()),
+                n: Some(dims[0].clone()),
+                m: Some(dims[1].clone()),
                 val
             })
         }

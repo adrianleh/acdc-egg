@@ -230,7 +230,7 @@ where
     T: Analysis<ACDC> + Clone+Debug + 'static,
 {
     let rw = generate_rw(
-        "wire_to_nwire",
+        "wire_to_n_wire",
         &ACDCZX::Val {
             val: String::from("Wire"),
             n: Some(simple_lit(1)),

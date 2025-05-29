@@ -30,12 +30,13 @@ fn get_val_name(zx_dim: &ZXOrDimOrEither) -> String {
     if zx_dim.is_zx() {
         match zx_dim.get_zx().unwrap() {
             ACDCZX::Val { val, n: _, m: _ } => val,
-            _ => panic!("Not a string"),
+            dim => panic!("Not a string, instead {:?}", dim),
         }
     } else {
         match zx_dim.get_dim().unwrap() {
             ACDCDim::Symbol { symbol } => symbol,
-            _ => panic!("Not a string"),
+            // ACDCDim::Lit { lit } => lit.to_string(),
+            dim => panic!("Not a string, instead {:?}", dim),
         }
     }
 }
@@ -87,7 +88,7 @@ fn recexpr_to_ACDC_at(rec_expr: &RecExpr<ACDC>, i: Id) -> ZXOrDimOrEither {
         ACDC::Compose([a, b]) => {
             binop_to_zx!(Compose, rec_expr, a, b)
         }
-        ACDC::Val([s, n, m]) => {
+        ACDC::Val([ n, m, s]) => {
             let n = recexpr_to_ACDC_at(rec_expr, *n).get_dim().unwrap();
             let m = recexpr_to_ACDC_at(rec_expr, *m).get_dim().unwrap();
             let s = recexpr_to_ACDC_at(rec_expr, *s);

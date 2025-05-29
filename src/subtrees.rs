@@ -158,14 +158,14 @@ pub fn rewrite_at_idx(a: &ACDCZX, b: &ACDCZX, subtree: &ACDCZX) -> (usize, bool)
         eprintln!("Base eq");
         return (0, false);
     }
-    println!("Non base eq");
+    // println!("Non base eq");
 
     fn helper(a: &ACDCZX, b: &ACDCZX, subtree: &ACDCZX, idx: usize) -> (usize, bool) {
         // eprintln!("11111111111111111111111\nSearch for idx with\na = {:?}\nb = {:?}\nsubtree={:?}\n11111111111111111111111", a, b, subtree);
-        println!(
-            "Search for idx (curr {}) with\na = {:?}\nb = {:?}\nsubtree={:?}",
-            idx, a, b, subtree
-        );
+        // println!(
+        //     "Search for idx (curr {}) with\na = {:?}\nb = {:?}\nsubtree={:?}",
+        //     idx, a, b, subtree
+        // );
         if is_equal_subtree_zx(a, subtree) {
             eprintln!(
                 "Found subtree! is b eq? {}",
@@ -227,7 +227,7 @@ pub fn rewrite_at_idx(a: &ACDCZX, b: &ACDCZX, subtree: &ACDCZX) -> (usize, bool)
 mod tests {
     use super::*;
     use crate::ACDCZX::Compose;
-    use crate::{ACDCDim, ACDCZX, ZXOrDim, simple_lit};
+    use crate::{ACDCDim, ACDCZX, ZXOrDim, simple_lit, simple_var, simple_var_sized};
 
     fn create_sample_acdczx() -> ACDCZX {
         ACDCZX::Stack {
@@ -343,6 +343,20 @@ mod tests {
                 }),
             }),
         }
+    }
+    
+    #[test]
+    fn rewrite_at_idx_growing() {
+        let wire = simple_var_sized("Wire", 1, 1);
+        let a = wire.clone();
+        let b = ACDCZX::Compose {
+            a: Box::from(wire.clone()),
+            b: Box::from(ACDCZX::NWire {n : simple_lit(1)})
+        };
+        let subtree = wire;
+        let (idx, found) = rewrite_at_idx(&a, &b, &subtree);
+        assert_eq!(idx, 1);
+        assert!(found);
     }
 
     #[test]
