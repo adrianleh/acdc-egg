@@ -789,6 +789,7 @@ macro_rules! found_var {
                 name: $val.clone(),
             }])
         } else {
+            panic!("{:?} not found in {:?}", $val, $param_names);
             Ok(vec![])
         }
     };
