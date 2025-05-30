@@ -1,8 +1,8 @@
-use crate::vyzxlemma::{LemmaContainer, acdczx_to_pattern};
-use crate::vyzxrules::{compose_assoc, vyzx_rules, vyzx_rws};
+use crate::vyzxlemma::acdczx_to_pattern;
+use crate::vyzxrules::{compose_assoc, stack_assoc};
 use crate::{
-    ACDC, ACDCZX, ConstantFolding, Lemma, Proportional, dep_rules, dim_rules, run_with_problem,
-    simple_lit,
+    dep_rules, dim_rules, simple_lit, ConstantFolding, Lemma, Proportional, ACDC,
+    ACDCZX,
 };
 use egg::Runner;
 
@@ -36,9 +36,7 @@ fn benchmark_assoc(n: u32) {
         prop,
         hyps: vec![],
     };
-    let mut rules = compose_assoc().get_rewrites();
-    rules.extend(dim_rules());
-    rules.extend(dep_rules());
+    let rules = compose_assoc().get_rewrites();
     let expr = acdczx_to_pattern(&lemma.prop.l).parse().unwrap();
     let goal = acdczx_to_pattern(&lemma.prop.r).parse().unwrap();
 
@@ -50,8 +48,9 @@ fn benchmark_assoc(n: u32) {
         .with_iter_limit(usize::MAX)
         .run(&rules);
     let end_time = std::time::Instant::now();
-    eprintln!(
-        "Run time: {}ms",
+    println!(
+        "{},{}",
+        n,
         end_time.duration_since(start_time).as_millis()
     );
     let expr_id = runner.egraph.add_expr(&expr);

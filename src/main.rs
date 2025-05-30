@@ -44,8 +44,11 @@ fn main() {
         let n = raw_n.parse::<u32>().unwrap_or_else(|_| {
             panic!("Invalid benchmarrk size: {}", raw_n);
         });
+        println!("n,saturation time (ms)");
+        for i in 0..n {
+            benchmark(benchmark_name, i);
+        }
         // Run a test case
-        benchmark(benchmark_name, n);
         return;
     }
     let mut input = String::new();
@@ -97,10 +100,10 @@ impl Ser for ACDCTiming {
         S: Serializer,
     {
         let mut state = serializer.serialize_struct("ACDCTiming", 4)?;
-        state.serialize_field("name", &self.name);
-        state.serialize_field("run_time", &self.run_time);
-        state.serialize_field("explain_time", &self.explain_time);
-        state.serialize_field("conversion_time", &self.conversion_time);
+        state.serialize_field("name", &self.name)?;
+        state.serialize_field("run_time", &self.run_time)?;
+        state.serialize_field("explain_time", &self.explain_time)?;
+        state.serialize_field("conversion_time", &self.conversion_time)?;
         state.end()
     }
 }

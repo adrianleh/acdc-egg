@@ -45,7 +45,7 @@ where
         .collect()
 }
 
-fn stack_assoc<T>() -> Lemma<T>
+pub fn stack_assoc<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone + Debug + 'static,
 {
