@@ -135,7 +135,7 @@ where
     )
 }
 
-fn compose_assoc<T>() -> Lemma<T>
+pub fn compose_assoc<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {

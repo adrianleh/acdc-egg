@@ -268,11 +268,6 @@ fn contains_any_symbol(dim: &ACDCDim, s: &HashSet<String>) -> bool {
     }
 }
 
-fn invert(dim: &ACDCDim, s: &Symbol) -> ACDCDim {
-    unimplemented!("invert");
-    // solve for s in dim, where n can exists multiple times
-}
-
 fn contains_sub(dim: &ACDCDim) -> bool {
     match dim {
         ACDCDim::Add { a, b } => contains_sub(a) || contains_sub(b),
@@ -599,7 +594,7 @@ pub fn collect_dim_symbols(zx: &ACDCZX) -> HashSet<String> {
             ret.extend(find_all_symbols_in_expr(m));
             ret
         }
-        ACDCZX::Val { n, m, val } => {
+        ACDCZX::Val { n, m, val:_ } => {
             let mut ret = HashSet::new();
             if n.is_some() {
                 ret.extend(find_all_symbols_in_expr(&n.clone().unwrap()));
@@ -609,12 +604,12 @@ pub fn collect_dim_symbols(zx: &ACDCZX) -> HashSet<String> {
             }
             ret
         }
-        ACDCZX::Z { n, m, alpha } => {
+        ACDCZX::Z { n, m, alpha: _ } => {
             let mut ret = find_all_symbols_in_expr(n);
             ret.extend(find_all_symbols_in_expr(m));
             ret
         }
-        ACDCZX::X { n, m, alpha } => {
+        ACDCZX::X { n, m, alpha: _ } => {
             let mut ret = find_all_symbols_in_expr(n);
             ret.extend(find_all_symbols_in_expr(m));
             ret
@@ -677,7 +672,7 @@ where
 
     pub fn get_params_and_side(&self, node: &ACDCZX, lhs: bool) -> (Vec<MatchedZXParam>, bool) {
         eprintln!("PARAMS: {:?}", self.params);
-        if (self.params.len() == 0) {
+        if self.params.len() == 0 {
             eprintln!("No params, returning empty vec");
             return (vec![], lhs);
         }
@@ -790,7 +785,6 @@ macro_rules! found_var {
             }])
         } else {
             panic!("{:?} not found in {:?}", $val, $param_names);
-            Ok(vec![])
         }
     };
 }
@@ -847,7 +841,6 @@ fn get_params_from_lemma(
             found_var!(param_names, val, r)
         }
         (l, ACDCZX::Val { val, n, m }) => {
-            eprintln!("{:?} matched to {:?}", val, l);
             found_var!(param_names, val, l)
         }
         (ACDCZX::Stack { a: a1, b: b1 }, ACDCZX::Stack { a: a2, b: b2 }) => {
@@ -880,13 +873,13 @@ fn get_params_from_lemma(
         }
         (
             ACDCZX::Cast {
-                n: n1,
-                m: m1,
+                n: _,
+                m: _,
                 zx: zx1,
             },
             ACDCZX::Cast {
-                n: n2,
-                m: m2,
+                n: _,
+                m: _,
                 zx: zx2,
             },
         ) => get_params_from_lemma(zx1, zx2, params),

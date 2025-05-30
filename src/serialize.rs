@@ -1,10 +1,10 @@
-use crate::ACDC;
 use crate::conv::acdc_to_acdc_zx_or_dim;
 use crate::recexpr::recexpr_to_ACDC;
-use crate::serialize::Direction::{Backward, Forward};
+use crate::serialize::Direction::Backward;
 use crate::subtrees::rewrite_at_idx;
 use crate::vyzxlemma::{LemmaContainer, REVERSE_LEMMA_SUFFIX};
-use egg::{Analysis, EGraph, FlatTerm, Language, RecExpr};
+use crate::{ACDC, ACDCTiming, ConstantFolding};
+use egg::{Analysis, EGraph, FlatTerm, Language, RecExpr, Runner};
 use serde::Serialize as Ser;
 use serde::Serializer;
 use serde::ser::SerializeStruct;
@@ -301,7 +301,11 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
                 let new = new.get_zx().unwrap();
                 if acdczx.is_zx() {
                     let acdczx = &acdczx.get_zx().unwrap();
-                    eprintln!("Getting proof args for {:?} on {:?}", proof.clone().unwrap(), acdczx);
+                    eprintln!(
+                        "Getting proof args for {:?} on {:?}",
+                        proof.clone().unwrap(),
+                        acdczx
+                    );
                     let (raw_args, _) = self
                         .container
                         .get_match_side_args(&proof.clone().unwrap(), &acdczx)
@@ -345,16 +349,14 @@ where
     T: Analysis<ACDC> + Clone + Debug + 'static,
 {
     expl: Vec<SerFlatTermWrap<'a, T>>,
-    expl_time: u64,
-    saturation_time: u64,
+    timing: ACDCTiming,
 }
 
 impl<'a, T: Analysis<ACDC> + Clone + Debug + 'static> ACDCResult<'a, T> {
-    pub fn new(expl: Vec<SerFlatTermWrap<'a, T>>, expl_time: u64, saturation_time: u64) -> Self {
+    pub fn new(expl: Vec<SerFlatTermWrap<'a, T>>, timing: ACDCTiming) -> Self {
         ACDCResult {
             expl,
-            expl_time,
-            saturation_time,
+            timing
         }
     }
 }
@@ -366,8 +368,7 @@ impl<'a, T: Analysis<ACDC> + Clone + Debug + 'static> Ser for ACDCResult<'a, T> 
     {
         let mut state = serializer.serialize_struct("Result", 3)?;
         state.serialize_field("expl", &self.expl)?;
-        state.serialize_field("expl_time", &self.expl_time)?;
-        state.serialize_field("saturation_time", &self.saturation_time)?;
+        state.serialize_field("expl_time", &self.timing)?;
         state.end()
     }
 }

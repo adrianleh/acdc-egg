@@ -1,6 +1,6 @@
 extern crate alloc;
-extern crate core;
 
+mod benchmark;
 mod conditioneqwrapper;
 mod conds;
 mod conv;
@@ -12,23 +12,40 @@ mod subtrees;
 mod vyzxlemma;
 mod vyzxrules;
 
-use crate::serialize::{ACDCResult, Direction, Proof, SerFlatTermWrap};
+use crate::benchmark::benchmark;
+use crate::serialize::{ACDCResult, SerFlatTermWrap};
 use crate::vyzxlemma::{LemmaContainer, acdczx_to_pattern};
 use crate::vyzxrules::{vyzx_rules, vyzx_rws};
 use alloc::string::String;
-use core::fmt::Debug;
+use core::fmt::{Debug, Display};
 use egg::*;
+use serde::Serialize as Ser;
+use serde::Serializer;
+use serde::ser::SerializeStruct;
 use serde_derive::{Deserialize, Serialize};
 use std::cmp::max;
 use std::io;
 use std::io::Read;
-use std::process::exit;
+use std::time::Duration;
 
 const TEST_STRING: &str = "@@@@@@@test@@@@@@@";
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 && args[1] == "--version" {
         println!("0.0.1");
+        return;
+    }
+    if args.len() > 1 && args[1] == "--benchmark" {
+        if args.len() != 4 {
+            panic!("Usage: --benchmark <benchmark_name> <n>");
+        }
+        let benchmark_name = &args[2];
+        let raw_n = &args[3];
+        let n = raw_n.parse::<u32>().unwrap_or_else(|_| {
+            panic!("Invalid benchmarrk size: {}", raw_n);
+        });
+        // Run a test case
+        benchmark(benchmark_name, n);
         return;
     }
     let mut input = String::new();
@@ -39,11 +56,82 @@ fn main() {
         println!("Success!");
         return;
     }
-    run_with_problem(input.as_str());
+    run_with_json(input.as_str());
 }
 
-fn run_with_problem(json: &str) {
+fn run_with_json(json: &str) {
     let zx: Lemma = serde_json::from_str(json).expect("Failed to parse JSON");
+    let mut rules = vyzx_rws();
+    rules.extend(dim_rules());
+    // println!("{:?}", vyzx_rules::<ConstantFolding>());
+    rules.extend(dep_rules());
+    run_with_problem(&zx, &rules);
+}
+
+#[derive(Debug, Clone)]
+pub struct ACDCTiming {
+    pub name: Option<String>,
+    pub run_time: Duration,
+    pub explain_time: Duration,
+    pub conversion_time: Duration,
+}
+impl ACDCTiming {
+    pub fn new(
+        name: Option<String>,
+        run_time: Duration,
+        explain_time: Duration,
+        conversion_time: Duration,
+    ) -> Self {
+        Self {
+            name,
+            run_time,
+            explain_time,
+            conversion_time,
+        }
+    }
+}
+
+impl Ser for ACDCTiming {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("ACDCTiming", 4)?;
+        state.serialize_field("name", &self.name);
+        state.serialize_field("run_time", &self.run_time);
+        state.serialize_field("explain_time", &self.explain_time);
+        state.serialize_field("conversion_time", &self.conversion_time);
+        state.end()
+    }
+}
+
+impl Display for ACDCTiming {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.name.is_none() {
+            let str = format!(
+                "Run time: {}ms\nExplain time: {}ms\nConversion time: {}ms",
+                self.run_time.as_millis(),
+                self.explain_time.as_millis(),
+                self.conversion_time.as_millis()
+            );
+            write!(f, "{}", str)
+        } else {
+            let str = format!(
+                "Timing for {}:\nRun time: {}ms\nExplain time: {}ms\nConversion time: {}ms",
+                self.name.clone().unwrap(),
+                self.run_time.as_millis(),
+                self.explain_time.as_millis(),
+                self.conversion_time.as_millis()
+            );
+            write!(f, "{}", str)
+        }
+    }
+}
+
+fn run_with_problem(
+    zx: &Lemma,
+    rules: &Vec<Rewrite<ACDC, ConstantFolding>>,
+) -> ACDCTiming {
     // let val_a = "(val n1 (* 1 m1) a)";
     // let val_b = "(val (+ 0 m1) o1 b)";
     // let val_c = "(val n2 m2 c)";
@@ -60,22 +148,16 @@ fn run_with_problem(json: &str) {
     let expr = acdczx_to_pattern(&zx.prop.l).parse().unwrap();
     let goal = acdczx_to_pattern(&zx.prop.r).parse().unwrap();
     let lemmas = LemmaContainer::new(vyzx_rules());
-    let mut rules = vyzx_rws();
-    rules.extend(dim_rules());
-    // println!("{:?}", vyzx_rules::<ConstantFolding>());
-    rules.extend(dep_rules());
+
     let start_time = std::time::Instant::now();
     let mut runner = Runner::<ACDC, ConstantFolding, ()>::default()
         .with_explanations_enabled()
         .with_expr(&expr)
         .with_expr(&goal)
         // .with_iter_limit(15)
-        .run(&rules);
+        .run(rules);
     let end_time = std::time::Instant::now();
-    eprintln!(
-        "Run time: {}ms",
-        end_time.duration_since(start_time).as_millis()
-    );
+    let run_time = end_time.duration_since(start_time);
     let expr_id = runner.egraph.add_expr(&expr);
     let res = runner.egraph.add_expr(&goal);
     assert_eq!(runner.egraph.find(expr_id), runner.egraph.find(res),);
@@ -117,11 +199,13 @@ fn run_with_problem(json: &str) {
     // exit(1);
 
     let flat_explanations: Vec<_> = expl.make_flat_explanation().to_vec();
+    let end_expl_time = std::time::Instant::now();
+    let expl_time = end_expl_time.duration_since(start_expl_time);
+    let start_conv_time = std::time::Instant::now();
     eprintln!("flat_explanations size: {:}", flat_explanations.len());
-    let egraph = &runner.egraph;
-    eprintln!("prev node : {:?}", &egraph.id_to_node(expr_id));
-    eprintln!("prev node 4: {:?}", &egraph.id_to_node(4.into()));
-    eprintln!("prev node 0: {:?}", &egraph.id_to_node(0.into()));
+    eprintln!("prev node : {:?}", &runner.egraph.id_to_node(expr_id));
+    eprintln!("prev node 4: {:?}", &runner.egraph.id_to_node(4.into()));
+    eprintln!("prev node 0: {:?}", &runner.egraph.id_to_node(0.into()));
     let mut prev = runner
         .egraph
         .id_to_node(expr_id)
@@ -134,27 +218,17 @@ fn run_with_problem(json: &str) {
             prev.clone(),
             curr.clone(),
             ft.clone(),
-            egraph,
+            &runner.egraph,
             &lemmas,
         ));
         prev = curr.clone();
     }
-    let end_expl_time = std::time::Instant::now();
-    let result = ACDCResult::new(
-        wrap_exprs.clone(),
-        end_expl_time.duration_since(start_expl_time).as_millis() as u64,
-        end_time.duration_since(start_time).as_millis() as u64,
-    );
+    let end_conv_time = std::time::Instant::now();
+    let conversion_time = end_conv_time.duration_since(start_conv_time);
+    let timing = ACDCTiming::new(zx.name.clone(), run_time, expl_time, conversion_time);
+    let result = ACDCResult::new(wrap_exprs, timing.clone());
     println!("{}", serde_json::to_string_pretty(&result).unwrap());
-
-    eprintln!(
-        "Run time: {}ms",
-        end_time.duration_since(start_time).as_millis()
-    );
-    eprintln!(
-        "Explain time: {}ms",
-        end_expl_time.duration_since(start_expl_time).as_millis()
-    );
+    timing
 }
 
 fn dim_rules<T>() -> Vec<Rewrite<ACDC, T>>
@@ -208,7 +282,7 @@ fn simple_var(s: &str) -> ACDCZX {
 }
 
 #[inline(always)]
-fn simple_var_sized(s: &str, n: i32, m : i32) -> ACDCZX {
+fn simple_var_sized(s: &str, n: i32, m: i32) -> ACDCZX {
     ACDCZX::Val {
         n: Some(simple_lit(n)),
         m: Some(simple_lit(m)),
