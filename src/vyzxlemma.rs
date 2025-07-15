@@ -1,9 +1,9 @@
 use crate::conds::{
-    AndCondition, ConditionEqualWrap, FalseCondition, TrueCondition, to_condition_equal,
+    to_condition_equal, AndCondition, ConditionEqualWrap, FalseCondition, TrueCondition,
 };
 use crate::serialize::Direction::Forward;
 use crate::serialize::Proof;
-use crate::{ACDC, ACDCDim, ACDCZX, Hyp, ZXOrDim, simple_var};
+use crate::{simple_var, ACDCDim, DirectionalLemma, Hyp, ZXOrDim, ACDC, ACDCZX};
 use egg::{Analysis, ConditionalApplier, Language, Pattern, RecExpr, Rewrite, Symbol};
 use serde_derive::{Deserialize, Serialize};
 use std::cmp::PartialEq;
@@ -594,7 +594,7 @@ pub fn collect_dim_symbols(zx: &ACDCZX) -> HashSet<String> {
             ret.extend(find_all_symbols_in_expr(m));
             ret
         }
-        ACDCZX::Val { n, m, val:_ } => {
+        ACDCZX::Val { n, m, val: _ } => {
             let mut ret = HashSet::new();
             if n.is_some() {
                 ret.extend(find_all_symbols_in_expr(&n.clone().unwrap()));
@@ -929,6 +929,29 @@ fn get_params_from_lemma(
             }
         }
     }
+}
+
+pub fn generate_rw_from_lemma<T>(directional_lemma: DirectionalLemma) -> Lemma<T>
+where
+    T: Analysis<ACDC> + Clone + 'static + Debug,
+{
+    let name = directional_lemma
+        .lemma
+        .name
+        .unwrap_or("Unnamed Lemma".to_string());
+    let l = directional_lemma.lemma.prop.l;
+    let r = directional_lemma.lemma.prop.r;
+    let fwd = directional_lemma.direction == Forward;
+    let lhs = if fwd { &l } else { &r };
+    let rhs = if fwd { &r } else { &l };
+    let bidirectional = false;
+    let mut params = Vec::new();
+    for hyp in &directional_lemma.lemma.hyps {
+        if let Hyp::DepHyp { name, n, m } = hyp {
+            params.push(ZXParam::new(n.clone(), m.clone(), name));
+        }
+    }
+    generate_rw(name.as_str(), &lhs, &rhs, params, bidirectional)
 }
 
 pub fn generate_rw<T>(

@@ -13,7 +13,7 @@ mod vyzxlemma;
 mod vyzxrules;
 
 use crate::benchmark::benchmark;
-use crate::serialize::{ACDCResult, SerFlatTermWrap};
+use crate::serialize::{ACDCResult, Direction, SerFlatTermWrap};
 use crate::vyzxlemma::{LemmaContainer, acdczx_to_pattern};
 use crate::vyzxrules::{vyzx_rules, vyzx_rws};
 use alloc::string::String;
@@ -583,6 +583,14 @@ pub struct Lemma {
     name: Option<String>,
     hyps: Vec<Hyp>,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub struct DirectionalLemma {
+    pub lemma: Lemma,
+    pub direction: Direction,
+}
+
 
 // fn main() {
 //     let json_data = r#"{"type":"Lemma","prop":{"type":"prop","r":{"type":"cast","n":{"type":"symbol","symbol":"n'"},"m":{"type":"symbol","symbol":"m'"},"zx":{"type":"fn","fn":"f","args":[{"type":"symbol","symbol":"zx1"}]}},"l":{"type":"cast","n":{"type":"symbol","symbol":"n'"},"m":{"type":"symbol","symbol":"m'"},"zx":{"type":"symbol","symbol":"zx0"}}},"hyps":[{"type":"dephyp","name":"zx0","n":{"type":"-","a":{"type":"+","a":{"type":"symbol","symbol":"n"},"b":{"type":"const","lit":16}},"b":{"type":"const","lit":3}},"m":{"type":"symbol","symbol":"m"}},{"type":"dephyp","name":"zx1","n":{"type":"-","a":{"type":"+","a":{"type":"symbol","symbol":"n"},"b":{"type":"const","lit":16}},"b":{"type":"const","lit":3}},"m":{"type":"symbol","symbol":"m"}},{"type":"hypprop","prop":{"type":"prop","r":{"type":"symbol","symbol":"zx1"},"l":{"type":"symbol","symbol":"zx0"}},"hyps":[]}]}

@@ -359,7 +359,7 @@ impl<'a, T: Analysis<ACDC> + Clone + Debug + 'static> ACDCResult<'a, T> {
             timing
         }
     }
-}
+}   
 
 impl<'a, T: Analysis<ACDC> + Clone + Debug + 'static> Ser for ACDCResult<'a, T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
