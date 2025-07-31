@@ -1,7 +1,7 @@
 use crate::vyzxlemma::acdczx_to_pattern;
-use crate::vyzxrules::{compose_assoc, stack_assoc};
+use crate::vyzxrules::compose_assoc;
 use crate::{
-    dep_rules, dim_rules, simple_lit, ConstantFolding, Lemma, Proportional, ACDC,
+    simple_lit, ConstantFolding, Lemma, Proportional, ACDC,
     ACDCZX,
 };
 use egg::Runner;

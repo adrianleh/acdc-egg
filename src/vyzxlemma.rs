@@ -949,6 +949,8 @@ where
     for hyp in &directional_lemma.lemma.hyps {
         if let Hyp::DepHyp { name, n, m } = hyp {
             params.push(ZXParam::new(n.clone(), m.clone(), name));
+        } else {
+            panic!("No full hypotheses supported yet");
         }
     }
     generate_rw(name.as_str(), &lhs, &rhs, params, bidirectional)
@@ -1067,6 +1069,14 @@ where
             lemma_map.insert(lemma.name.clone(), Box::new(lemma));
         }
         LemmaContainer { lemmas: lemma_map }
+    }
+    
+    pub fn add(&mut self, lemma: Lemma<T>) {
+        self.lemmas.insert(lemma.name.clone(), Box::new(lemma));
+    }
+    
+    pub fn clear(&mut self) {
+        self.lemmas.clear();
     }
 
     pub fn get(&self, name: &String) -> Option<Box<Lemma<T>>> {

@@ -11,6 +11,7 @@ mod serialize;
 mod subtrees;
 mod vyzxlemma;
 mod vyzxrules;
+mod jsonrpc;
 
 use crate::benchmark::benchmark;
 use crate::serialize::{ACDCResult, Direction, SerFlatTermWrap};
@@ -134,7 +135,7 @@ impl Display for ACDCTiming {
 fn run_with_problem(
     zx: &Lemma,
     rules: &Vec<Rewrite<ACDC, ConstantFolding>>,
-) -> ACDCTiming {
+) -> String {
     // let val_a = "(val n1 (* 1 m1) a)";
     // let val_b = "(val (+ 0 m1) o1 b)";
     // let val_c = "(val n2 m2 c)";
@@ -230,8 +231,7 @@ fn run_with_problem(
     let conversion_time = end_conv_time.duration_since(start_conv_time);
     let timing = ACDCTiming::new(zx.name.clone(), run_time, expl_time, conversion_time);
     let result = ACDCResult::new(wrap_exprs, timing.clone());
-    println!("{}", serde_json::to_string_pretty(&result).unwrap());
-    timing
+    serde_json::to_string_pretty(&result).unwrap().to_string()
 }
 
 fn dim_rules<T>() -> Vec<Rewrite<ACDC, T>>
