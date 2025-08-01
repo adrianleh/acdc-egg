@@ -28,9 +28,20 @@ use std::cmp::max;
 use std::io;
 use std::io::Read;
 use std::time::Duration;
+use crate::jsonrpc::tokio_main;
 
 const TEST_STRING: &str = "@@@@@@@test@@@@@@@";
-fn main() {
+#[tokio::main]
+async fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1) == Some(&"--legacy".to_string()) {
+        legacy_main();
+        return;
+    }
+    tokio_main().await; 
+}
+
+fn legacy_main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 && args[1] == "--version" {
         println!("0.0.1");

@@ -1,14 +1,11 @@
-// main.rs
-
 use crate::vyzxlemma::{Lemma, LemmaContainer, generate_rw_from_lemma};
 use crate::vyzxrules::{vyzx_rules, vyzx_rws};
-use crate::{ACDC, ConstantFolding, DirectionalLemma, dep_rules, dim_rules};
+use crate::{ACDC, ConstantFolding, DirectionalLemma, dep_rules, dim_rules, run_with_problem};
 use egg::Rewrite;
-use jsonrpc_v2::{Data, Error, Params, ResponseObject, ResponseObjects, Server};
-use serde::Deserialize;
+use jsonrpc_v2::{Data, Error, Params, ResponseObjects, Server};
 use std::ops::DerefMut;
 use std::sync::{Arc, Mutex};
-use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, stdin, stdout};
+use tokio::io::{self, AsyncBufReadExt, stdin};
 
 // This struct will hold the state that we want to share across methods.
 struct SharedState {
@@ -29,7 +26,8 @@ impl SharedState {
             .into_iter()
             .map(|l| generate_rw_from_lemma(l))
             .collect();
-        new_lemmas.clone()
+        new_lemmas
+            .clone()
             .into_iter()
             .for_each(|l| self.lemma_container.deref_mut().add(l));
         let new_rules: Vec<_> = new_lemmas
@@ -80,16 +78,18 @@ async fn default_lemmas(data: Data<Arc<Mutex<SharedState>>>) -> Result<i64, Erro
 async fn ping() -> Result<&'static str, Error> {
     Ok("pong")
 }
-
 /// A new method to retrieve a value from the shared state.
-async fn run(data: Data<Arc<Mutex<SharedState>>>) -> Result<String, Error> {
+async fn run(
+    data: Data<Arc<Mutex<SharedState>>>,
+    params: Params<crate::Lemma>,
+) -> Result<String, Error> {
     // Lock the mutex to get read-only access.
     let state = data.lock().unwrap();
-    Ok("a".to_string())
+    let result = run_with_problem(&params.0, &state.rules);
+    Ok(result)
 }
 
-#[tokio::main]
-async fn main() {
+pub async fn tokio_main() {
     let state = Arc::new(Mutex::new(SharedState::new()));
     let data = Data::new(state);
     let rpc = Server::new()
@@ -100,17 +100,16 @@ async fn main() {
         .with_method("ping", ping)
         .with_method("run_problem", run)
         .finish();
-
     eprintln!("JSON-RPC server started. Reading from stdin...");
 
     let mut reader = io::BufReader::new(stdin());
 
     let mut line_buf = String::new();
     while let Ok(len) = reader.read_line(&mut line_buf).await {
-        if len == 0 { // EOF reached
-            break;
+        if len == 0 {
+            break; // EOF reached
         }
-
+        
         let response_objects = rpc.handle(line_buf.as_bytes()).await;
         match response_objects {
             ResponseObjects::One(res) => {

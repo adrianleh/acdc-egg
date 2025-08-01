@@ -6,6 +6,7 @@ version = 4
 name = "acdc-egg"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "egg",
  "env_logger",
  "jsonrpc-v2",
