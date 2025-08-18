@@ -37,6 +37,9 @@ async fn main() {
     if args.get(1) == Some(&"--legacy".to_string()) {
         legacy_main();
         return;
+    } else if args.get(1) == Some(&"--test".to_string()) {
+        println!("ack");
+        return;
     }
     tokio_main().await; 
 }

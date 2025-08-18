@@ -5,7 +5,7 @@ use egg::Rewrite;
 use jsonrpc_v2::{Data, Error, Params, ResponseObjects, Server};
 use std::ops::DerefMut;
 use std::sync::{Arc, Mutex};
-use tokio::io::{self, AsyncBufReadExt, stdin};
+use tokio::io::{self, AsyncBufReadExt, stdin, AsyncReadExt};
 
 // This struct will hold the state that we want to share across methods.
 struct SharedState {
@@ -104,30 +104,61 @@ pub async fn tokio_main() {
 
     let mut reader = io::BufReader::new(stdin());
 
-    let mut line_buf = String::new();
-    while let Ok(len) = reader.read_line(&mut line_buf).await {
-        if len == 0 {
-            break; // EOF reached
+    let mut buffer = String::new();
+    loop {
+        let mut content_length = 0;
+
+        // Read headers until we find Content-Length or EOF
+        // Make sure to remember the content length
+        loop {
+            buffer.clear(); // Clear the buffer for the next header line
+            if reader.read_line(&mut buffer).await.unwrap_or(0) == 0 {
+                // EOF, connection closed
+                eprintln!("Connection closed.");
+                return;
+            }
+
+            // Check for the Content-Length header
+            if let Some(len_str) = buffer.strip_prefix("Content-Length: ") {
+                content_length = len_str.trim().parse().unwrap_or(0);
+            }
+
+            // An empty line (`\r\n`) indicates the end of headers
+            if buffer.trim().is_empty() {
+                break;
+            }
         }
         
-        let response_objects = rpc.handle(line_buf.as_bytes()).await;
+        // Likely not to cause issues but guarding any way
+        if content_length == 0 {
+            eprintln!("Warning: Received message with Content-Length of 0 or missing header.");
+            continue;
+        }
+
+        // Read the body into a buffer
+        let mut body_buf = vec![0; content_length];
+        if reader.read_exact(&mut body_buf).await.is_err() {
+            eprintln!("Error reading message body.");
+            break;
+        }
+
+        // Handle the request
+        let response_objects = rpc.handle(body_buf.as_slice()).await;
         match response_objects {
             ResponseObjects::One(res) => {
-                println!("{}", serde_json::to_string_pretty(&res).unwrap());
+                let res_str = serde_json::to_string(&res).unwrap();
+                println!("Content-Length: {}\r\n\r\n{}", res_str.len(), res_str);
             }
             ResponseObjects::Many(res_vec) => {
                 for res in res_vec {
-                    println!("{}", serde_json::to_string_pretty(&res).unwrap());
+                    let res_str = serde_json::to_string(&res).unwrap();
+                    println!("Content-Length: {}\r\n\r\n{}", res_str.len(), res_str);
                 }
             }
             ResponseObjects::Empty => {
-                eprintln!("No response generated for the request.");
+                // For notifications, no response is sent.
             }
         }
-
-        // Clear the buffer for the next request.
-        line_buf.clear();
     }
-
     eprintln!("Server shutting down.");
 }
