@@ -1,13 +1,14 @@
-use crate::vyzxlemma::{Lemma, LemmaContainer, generate_rw_from_lemma};
+use crate::vyzxlemma::{generate_rw_from_lemma, Lemma, LemmaContainer};
 use crate::vyzxrules::{vyzx_rules, vyzx_rws};
-use crate::{ACDC, ConstantFolding, DirectionalLemma, dep_rules, dim_rules, run_with_problem};
+use crate::{dep_rules, dim_rules, run_with_problem, ConstantFolding, Directional, ACDC};
+use actix_web::{guard, web, App, HttpServer};
 use egg::Rewrite;
 use jsonrpc_v2::{Data, Error, Params, ResponseObjects, Server};
+use serde_derive::Deserialize;
 use std::ops::DerefMut;
 use std::sync::{Arc, Mutex};
-use tokio::io::{self, AsyncBufReadExt, stdin, AsyncReadExt};
+use tokio::io::{self, stdin, AsyncBufReadExt, AsyncReadExt};
 
-// This struct will hold the state that we want to share across methods.
 struct SharedState {
     rules: Vec<Rewrite<ACDC, ConstantFolding>>,
     lemma_container: Box<LemmaContainer<ConstantFolding>>,
@@ -21,7 +22,7 @@ impl SharedState {
         }
     }
 
-    fn add_lemmas(&mut self, lemmas: Vec<DirectionalLemma>) -> i64 {
+    fn add_lemmas(&mut self, lemmas: Vec<Directional>) -> i64 {
         let new_lemmas: Vec<Lemma<ConstantFolding>> = lemmas
             .into_iter()
             .map(|l| generate_rw_from_lemma(l))
@@ -54,11 +55,23 @@ impl SharedState {
     }
 }
 
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum DirectionalParam {
+    Single(Vec<Directional>),
+    Nested(Vec<Vec<Directional>>),
+}
+
 async fn add(
     data: Data<Arc<Mutex<SharedState>>>,
-    Params(params): Params<Vec<DirectionalLemma>>,
+    Params(params): Params<DirectionalParam>,
 ) -> Result<i64, Error> {
     let mut state = data.lock().unwrap();
+    let params = match params {
+        DirectionalParam::Single(v) => v,
+        DirectionalParam::Nested(vv) => vv.into_iter().flatten().collect(),
+    };
     Ok(state.add_lemmas(params))
 }
 
@@ -69,27 +82,24 @@ async fn clear(data: Data<Arc<Mutex<SharedState>>>) -> Result<i64, Error> {
 }
 
 async fn default_lemmas(data: Data<Arc<Mutex<SharedState>>>) -> Result<i64, Error> {
-    // Lock the mutex to get mutable access to the state.
     let mut state = data.lock().unwrap();
     Ok(state.default_lemmas())
 }
 
-/// A simple "ping" method that takes no parameters and doesn't need the state.
 async fn ping() -> Result<&'static str, Error> {
     Ok("pong")
 }
-/// A new method to retrieve a value from the shared state.
+
 async fn run(
     data: Data<Arc<Mutex<SharedState>>>,
     params: Params<crate::Lemma>,
 ) -> Result<String, Error> {
-    // Lock the mutex to get read-only access.
     let state = data.lock().unwrap();
     let result = run_with_problem(&params.0, &state.rules);
     Ok(result)
 }
 
-pub async fn tokio_main() {
+pub async fn tokio_main(http: bool) {
     let state = Arc::new(Mutex::new(SharedState::new()));
     let data = Data::new(state);
     let rpc = Server::new()
@@ -100,6 +110,23 @@ pub async fn tokio_main() {
         .with_method("ping", ping)
         .with_method("run_problem", run)
         .finish();
+    if http {
+        const address: &str = "0.0.0.0:8080";
+        eprintln!("Starting JSON-RPC server on {}", address);
+        let _ = HttpServer::new(move || {
+            let rpc = rpc.clone();
+            App::new().service(
+                web::service("/api")
+                    .guard(guard::Post())
+                    .finish(rpc.into_web_service()),
+            )
+        })
+        .bind(address)
+        .unwrap()
+        .run()
+        .await;
+        return;
+    }
     eprintln!("JSON-RPC server started. Reading from stdin...");
 
     let mut reader = io::BufReader::new(stdin());
@@ -128,7 +155,7 @@ pub async fn tokio_main() {
                 break;
             }
         }
-        
+
         // Likely not to cause issues but guarding any way
         if content_length == 0 {
             eprintln!("Warning: Received message with Content-Length of 0 or missing header.");

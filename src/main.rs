@@ -5,13 +5,13 @@ mod conditioneqwrapper;
 mod conds;
 mod conv;
 mod diff;
+mod jsonrpc;
 mod problems;
 mod recexpr;
 mod serialize;
 mod subtrees;
 mod vyzxlemma;
 mod vyzxrules;
-mod jsonrpc;
 
 use crate::benchmark::benchmark;
 use crate::serialize::{ACDCResult, Direction, SerFlatTermWrap};
@@ -28,8 +28,6 @@ use std::cmp::max;
 use std::io;
 use std::io::Read;
 use std::time::Duration;
-use crate::jsonrpc::tokio_main;
-
 const TEST_STRING: &str = "@@@@@@@test@@@@@@@";
 #[tokio::main]
 async fn main() {
@@ -41,9 +39,9 @@ async fn main() {
         println!("ack");
         return;
     }
-    tokio_main().await; 
+    let http = args.get(1) == Some(&"--http".to_string());
+    tokio_main(http).await;
 }
-
 fn legacy_main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 && args[1] == "--version" {
@@ -76,6 +74,8 @@ fn legacy_main() {
     }
     run_with_json(input.as_str());
 }
+
+use crate::jsonrpc::tokio_main;
 
 fn run_with_json(json: &str) {
     let zx: Lemma = serde_json::from_str(json).expect("Failed to parse JSON");
@@ -146,10 +146,7 @@ impl Display for ACDCTiming {
     }
 }
 
-fn run_with_problem(
-    zx: &Lemma,
-    rules: &Vec<Rewrite<ACDC, ConstantFolding>>,
-) -> String {
+fn run_with_problem(zx: &Lemma, rules: &Vec<Rewrite<ACDC, ConstantFolding>>) -> String {
     // let val_a = "(val n1 (* 1 m1) a)";
     // let val_b = "(val (+ 0 m1) o1 b)";
     // let val_c = "(val n2 m2 c)";
@@ -572,6 +569,7 @@ where
 // }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "type", rename = "prop")]
 pub struct Proportional {
     l: ACDCZX,
     r: ACDCZX,
@@ -599,17 +597,10 @@ pub struct Lemma {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub struct DirectionalLemma {
+#[serde(tag = "type", rename = "DirectionalLemma")]
+pub struct Directional {
     pub lemma: Lemma,
     pub direction: Direction,
+    pub simplification: bool,
 }
 
-
-// fn main() {
-//     let json_data = r#"{"type":"Lemma","prop":{"type":"prop","r":{"type":"cast","n":{"type":"symbol","symbol":"n'"},"m":{"type":"symbol","symbol":"m'"},"zx":{"type":"fn","fn":"f","args":[{"type":"symbol","symbol":"zx1"}]}},"l":{"type":"cast","n":{"type":"symbol","symbol":"n'"},"m":{"type":"symbol","symbol":"m'"},"zx":{"type":"symbol","symbol":"zx0"}}},"hyps":[{"type":"dephyp","name":"zx0","n":{"type":"-","a":{"type":"+","a":{"type":"symbol","symbol":"n"},"b":{"type":"const","lit":16}},"b":{"type":"const","lit":3}},"m":{"type":"symbol","symbol":"m"}},{"type":"dephyp","name":"zx1","n":{"type":"-","a":{"type":"+","a":{"type":"symbol","symbol":"n"},"b":{"type":"const","lit":16}},"b":{"type":"const","lit":3}},"m":{"type":"symbol","symbol":"m"}},{"type":"hypprop","prop":{"type":"prop","r":{"type":"symbol","symbol":"zx1"},"l":{"type":"symbol","symbol":"zx0"}},"hyps":[]}]}
-// "#;
-//
-//     let zx: Lemma = serde_json::from_str(json_data).expect("Failed to parse JSON");
-//     println!("{:#?}", zx);
-// }

@@ -3,7 +3,7 @@ use crate::conds::{
 };
 use crate::serialize::Direction::Forward;
 use crate::serialize::Proof;
-use crate::{simple_var, ACDCDim, DirectionalLemma, Hyp, ZXOrDim, ACDC, ACDCZX};
+use crate::{simple_var, ACDCDim, Directional, Hyp, ZXOrDim, ACDC, ACDCZX};
 use egg::{Analysis, ConditionalApplier, Language, Pattern, RecExpr, Rewrite, Symbol};
 use serde_derive::{Deserialize, Serialize};
 use std::cmp::PartialEq;
@@ -931,7 +931,7 @@ fn get_params_from_lemma(
     }
 }
 
-pub fn generate_rw_from_lemma<T>(directional_lemma: DirectionalLemma) -> Lemma<T>
+pub fn generate_rw_from_lemma<T>(directional_lemma: Directional) -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone + 'static + Debug,
 {
@@ -948,7 +948,7 @@ where
     let mut params = Vec::new();
     for hyp in &directional_lemma.lemma.hyps {
         if let Hyp::DepHyp { name, n, m } = hyp {
-            params.push(ZXParam::new(n.clone(), m.clone(), name));
+            params.push(ZXParam::new(n.clone(), m.clone(), name.as_str()));
         } else {
             panic!("No full hypotheses supported yet");
         }
