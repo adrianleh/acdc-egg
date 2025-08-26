@@ -87,7 +87,7 @@ fn recexpr_to_ACDC_at(rec_expr: &RecExpr<ACDC>, i: Id) -> ZXOrDimOrEither {
         ACDC::Compose([a, b]) => {
             binop_to_zx!(Compose, rec_expr, a, b)
         }
-        ACDC::Val([ n, m, s]) => {
+        ACDC::Val([n, m, s]) => {
             let n = recexpr_to_ACDC_at(rec_expr, *n).get_dim().unwrap();
             let m = recexpr_to_ACDC_at(rec_expr, *m).get_dim().unwrap();
             let s = recexpr_to_ACDC_at(rec_expr, *s);
@@ -137,6 +137,22 @@ fn recexpr_to_ACDC_at(rec_expr: &RecExpr<ACDC>, i: Id) -> ZXOrDimOrEither {
                     },
                 )
             }
+        }
+        ACDC::NStack([n, zx]) => {
+            let n = recexpr_to_ACDC_at(rec_expr, *n).get_dim().unwrap();
+            let zx = recexpr_to_ACDC_at(rec_expr, *zx).get_zx().unwrap();
+            ZXOrDimOrEither::ZX(ACDCZX::NStack {
+                n: Box::new(n),
+                zx: Box::from(zx),
+            })
+        }
+        ACDC::NStack1([n, zx]) => {
+            let n = recexpr_to_ACDC_at(rec_expr, *n).get_dim().unwrap();
+            let zx = recexpr_to_ACDC_at(rec_expr, *zx).get_zx().unwrap();
+            ZXOrDimOrEither::ZX(ACDCZX::NStack1 {
+                n: Box::new(n),
+                zx: Box::from(zx),
+            })
         }
     }
 }

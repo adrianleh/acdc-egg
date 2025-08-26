@@ -1,9 +1,9 @@
 use crate::conds::{
-    to_condition_equal, AndCondition, ConditionEqualWrap, FalseCondition, TrueCondition,
+    AndCondition, ConditionEqualWrap, FalseCondition, TrueCondition, to_condition_equal,
 };
 use crate::serialize::Direction::Forward;
 use crate::serialize::Proof;
-use crate::{simple_var, ACDCDim, Directional, Hyp, ZXOrDim, ACDC, ACDCZX};
+use crate::{ACDC, ACDCDim, ACDCZX, Directional, Hyp, ZXOrDim, simple_var};
 use egg::{Analysis, ConditionalApplier, Language, Pattern, RecExpr, Rewrite, Symbol};
 use serde_derive::{Deserialize, Serialize};
 use std::cmp::PartialEq;
@@ -206,6 +206,20 @@ fn replace_dims_in_zx(zx: &ACDCZX, replace: &ACDCDim, with: &ACDCDim) -> ACDCZX 
             ACDCZX::Fn {
                 fn_name: fn_name.clone(),
                 args,
+            }
+        }
+        ACDCZX::NStack { n, zx } => {
+            let n = replace_dim_subtree(n, replace, with);
+            ACDCZX::NStack {
+                n: Box::new(n),
+                zx: zx.clone(),
+            }
+        }
+        ACDCZX::NStack1 { n, zx } => {
+            let n = replace_dim_subtree(n, replace, with);
+            ACDCZX::NStack1 {
+                n: Box::new(n),
+                zx: zx.clone(),
             }
         }
     }
@@ -584,6 +598,12 @@ pub fn acdczx_to_pattern(zx: &ACDCZX) -> String {
                 .collect::<Vec<String>>()
                 .join(" ")
         ),
+        ACDCZX::NStack { n, zx } => {
+            format!("(nstack {} {})", to_acdc_expr(n), acdczx_to_pattern(zx))
+        }
+        ACDCZX::NStack1 { n, zx } => {
+            format!("(nstack1 {} {})", to_acdc_expr(n), acdczx_to_pattern(zx))
+        }
     }
 }
 
@@ -638,6 +658,15 @@ pub fn collect_dim_symbols(zx: &ACDCZX) -> HashSet<String> {
                     }
                 }
             }
+            ret
+        },
+        ACDCZX::NStack { n, zx } => {
+            let mut ret = find_all_symbols_in_expr(n);
+            ret.extend(collect_dim_symbols(zx));
+            ret
+        } ,ACDCZX::NStack1 { n,zx } => {
+            let mut ret = find_all_symbols_in_expr(n);
+            ret.extend(collect_dim_symbols(zx));
             ret
         }
     }
@@ -734,6 +763,14 @@ where
                 ACDCZX::Cast { n, m, zx } => ACDCZX::Cast {
                     n: n.clone(),
                     m: m.clone(),
+                    zx: Box::from(build_subtree_helper(&zx.clone(), params)),
+                },
+                ACDCZX::NStack1 { n, zx } => ACDCZX::NStack1 {
+                    n: Box::from(n.clone()),
+                    zx: Box::from(build_subtree_helper(&zx.clone(), params)),
+                },
+                ACDCZX::NStack { n, zx } => ACDCZX::NStack {
+                    n: Box::from(n.clone()),
                     zx: Box::from(build_subtree_helper(&zx.clone(), params)),
                 },
                 ACDCZX::Val { n, m, val } => {
@@ -871,6 +908,12 @@ fn get_params_from_lemma(
             ret.extend(a_matches?);
             ret.extend(b_matches?);
             Ok(ret)
+        },
+        (ACDCZX::NStack1 {n: n1, zx: zx1}, ACDCZX::NStack1 {n: n2, zx: zx2}) => {
+            get_params_from_lemma(zx1, zx2, params)
+        }
+        (ACDCZX::NStack {n: n1, zx: zx1}, ACDCZX::NStack {n: n2, zx: zx2}) => {
+            get_params_from_lemma(zx1, zx2, params)
         }
         (
             ACDCZX::Cast {
@@ -973,11 +1016,11 @@ where
     let replaced_rhs = &params.iter().fold(rhs.clone(), |acc, param| {
         replace_param_with_dep_zx(&acc, &param)
     });
-    // println!("------");
-    // println!("{}", name);
-    // println!("{:?} - {:?}", lhs, replaced_lhs);
-    // println!("{:?} - {:?}", rhs, replaced_rhs);
-    // println!("------");
+    println!("------");
+    println!("{}", name);
+    println!("{:?} - {:?}", lhs, replaced_lhs);
+    println!("{:?} - {:?}", rhs, replaced_rhs);
+    println!("------");
     let mut all_symbols_in_exprs = collect_dim_symbols(replaced_lhs);
     all_symbols_in_exprs.extend(collect_dim_symbols(replaced_rhs));
     let l_pattern: Pattern<ACDC> = acdczx_to_pattern(replaced_lhs).as_str().parse().unwrap();
@@ -1075,11 +1118,11 @@ where
         }
         LemmaContainer { lemmas: lemma_map }
     }
-    
+
     pub fn add(&mut self, lemma: Lemma<T>) {
         self.lemmas.insert(lemma.name.clone(), Box::new(lemma));
     }
-    
+
     pub fn clear(&mut self) {
         self.lemmas.clear();
     }

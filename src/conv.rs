@@ -222,6 +222,28 @@ where
                 .unwrap();
             ZXOrDimOrEither::ZX(ACDCZX::NWire { n: dim.clone() })
         }
+        ACDC::NStack(ids) => {
+            let n_node = egraph.id_to_node(ids[0]);
+            let zx_node = egraph.id_to_node(ids[1]);
+            let n = acdc_to_acdc_zx_or_dim(n_node, egraph).get_dim()
+                .or_else(|| panic!("Type error: NStack1 n points to ZX"))
+                .unwrap();
+            let zx = acdc_to_acdc_zx_or_dim(zx_node, egraph).get_zx()
+                .or_else(|| panic!("Type error: NStack1 zx points to Dim"))
+                .unwrap();
+            ZXOrDimOrEither::ZX(ACDCZX::NStack { n: Box::new(n), zx: Box::from(zx) })
+        }
+        ACDC::NStack1(ids) => {
+            let n_node = egraph.id_to_node(ids[0]);
+            let zx_node = egraph.id_to_node(ids[1]);
+            let n = acdc_to_acdc_zx_or_dim(n_node, egraph).get_dim()
+                .or_else(|| panic!("Type error: NStack1 n points to ZX"))
+                .unwrap();
+            let zx = acdc_to_acdc_zx_or_dim(zx_node, egraph).get_zx()
+                .or_else(|| panic!("Type error: NStack1 zx points to Dim"))
+                .unwrap();
+            ZXOrDimOrEither::ZX(ACDCZX::NStack1 { n: Box::new(n), zx: Box::from(zx) })
+        }
         ACDC::Fn(fn_name, args) => {
             let args = args
                 .iter()

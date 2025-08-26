@@ -361,6 +361,8 @@ define_language! {
         "Z" = Z([Id; 3]),
         "X" = X([Id; 3]),
         "nwire" = NWire(Id),
+        "nstack" = NStack([Id; 2]),
+        "nstack1" = NStack1([Id; 2]),
         Fn(Symbol, Vec<Id>),
     }
 }
@@ -394,6 +396,8 @@ where
         ACDC::Z(_) => true,
         ACDC::X(_) => true,
         ACDC::NWire(_) => true,
+        ACDC::NStack(_) => true,
+        ACDC::NStack1(_) => true,
         ACDC::Fn(_, ids) => ids
             .iter()
             .all(|id| is_zx_term(egraph.id_to_node(*id), egraph)),
@@ -509,6 +513,10 @@ pub enum ACDCZX {
     Compose { a: Box<ACDCZX>, b: Box<ACDCZX> },
     #[serde(rename = "nwire")]
     NWire { n: ACDCDim },
+    #[serde(rename = "n_stack")]
+    NStack { n: Box<ACDCDim>, zx: Box<ACDCZX> },
+    #[serde(rename = "n_stack1")]
+    NStack1 { n: Box<ACDCDim>, zx: Box<ACDCZX> },
     #[serde(rename = "fn")]
     Fn {
         #[serde(rename = "fn")]

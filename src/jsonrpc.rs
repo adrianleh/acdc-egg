@@ -87,6 +87,18 @@ async fn add(
     Err(Error::internal(res.err().unwrap()))
 }
 
+// async fn add(
+//     data: Data<Arc<Mutex<SharedState>>>,
+//     Params(params): Params<Vec<Directional>>,
+// ) -> Result<i64, Error> {
+//     let mut state = data.lock().unwrap();
+//     let res = state.add_lemmas(params);
+//     if res.is_ok() {
+//         return Ok(res.unwrap());
+//     }
+//     Err(Error::internal(res.err().unwrap()))
+// }
+
 async fn clear(data: Data<Arc<Mutex<SharedState>>>) -> Result<i64, Error> {
     // Lock the mutex to get mutable access to the state.
     let mut state = data.lock().unwrap();
