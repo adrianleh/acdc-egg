@@ -87,7 +87,7 @@ where
             ZXParam::new(simple_symbol("n3"), simple_symbol("m3"), "c"),
         ],
         false,
-    )
+    ).unwrap()
 }
 
 fn stack_assoc_back<T>() -> Lemma<T>
@@ -132,7 +132,7 @@ where
             ZXParam::new(simple_symbol("n3"), simple_symbol("m3"), "c"),
         ],
         false,
-    )
+    ).unwrap()
 }
 
 pub fn compose_assoc<T>() -> Lemma<T>
@@ -161,7 +161,7 @@ where
             ZXParam::new(simple_symbol("n3"), simple_symbol("m3"), "c"),
         ],
         true,
-    )
+    ).unwrap()
 }
 
 fn nwire_l<T>() -> Lemma<T>
@@ -179,7 +179,7 @@ where
         &simple_var("zx"),
         vec![ZXParam::new(simple_symbol("n"), simple_symbol("m"), "zx")],
         false,
-    )
+    ).unwrap()
 }
 
 fn nwire_r<T>() -> Lemma<T>
@@ -197,7 +197,7 @@ where
         &simple_var("zx"),
         vec![ZXParam::new(simple_symbol("n"), simple_symbol("m"), "zx")],
         false,
-    )
+    ).unwrap()
 }
 
 fn nwire_add<T>() -> Lemma<T>
@@ -222,7 +222,7 @@ where
         },
         vec![],
         false,
-    )
+    ).unwrap()
 }
 
 fn wire_to_nwire<T>() -> Lemma<T>
@@ -240,7 +240,7 @@ where
         vec![],
         true,
     );
-    rw
+    rw.unwrap()
 }
 
 fn empty_to_n_wire<T>() -> Lemma<T>
@@ -257,7 +257,7 @@ where
         &ACDCZX::NWire { n: simple_lit(0) },
         vec![],
         true,
-    )
+    ).unwrap()
 }
 
 fn stack_empty_top<T>() -> Lemma<T>
@@ -277,7 +277,7 @@ where
         &simple_var("zx"),
         vec![ZXParam::new(simple_symbol("n"), simple_symbol("m"), "zx")],
         false,
-    )
+    ).unwrap()
 }
 
 fn stack_empty_bot<T>() -> Lemma<T>
@@ -311,7 +311,7 @@ where
         },
         vec![ZXParam::new(simple_symbol("n"), simple_symbol("m"), "zx")],
         false,
-    )
+    ).unwrap()
 }
 
 fn cast_id<T>() -> Lemma<T>
@@ -328,7 +328,7 @@ where
         &simple_var("zx"),
         vec![ZXParam::new(simple_symbol("n"), simple_symbol("m"), "zx")],
         false,
-    )
+    ).unwrap()
 }
 
 fn cast_contract<T>() -> Lemma<T>
@@ -353,7 +353,7 @@ where
         },
         vec![ZXParam::new(simple_symbol("n"), simple_symbol("m"), "zx")],
         false,
-    )
+    ).unwrap()
 }
 
 fn stack_compose_dist<T>() -> Lemma<T>
@@ -389,7 +389,7 @@ where
             ZXParam::new(simple_symbol("m2"), simple_symbol("o2"), "d"),
         ],
         true,
-    )
+    ).unwrap()
 }
 
 /* Lemma stack_nwire_distribute_l : forall {n m o p} (zx0 : ZX n m) (zx1 : ZX m o),
@@ -428,7 +428,7 @@ where
             ZXParam::new(simple_symbol("m"), simple_symbol("o"), "zx1"),
         ],
         true,
-    )
+    ).unwrap()
 }
 /* Lemma stack_nwire_distribute_r : forall {n m o p} (zx0 : ZX n m) (zx1 : ZX m o),
 (zx0 ⟷ zx1) ↕ n_wire p ∝= (zx0 ↕ n_wire p) ⟷ (zx1 ↕ n_wire p). */
@@ -466,7 +466,7 @@ where
             ZXParam::new(simple_symbol("m"), simple_symbol("o"), "zx1"),
         ],
         true,
-    )
+    ).unwrap()
 }
 
 // Lemma cast_stack_l : forall {nTop nTop' mTop mTop' nBot mBot} prfnTop prfmTop prfn prfm
@@ -506,7 +506,7 @@ where
             ZXParam::new(simple_symbol("nBot"), simple_symbol("mBot"), "zxBot"),
         ],
         true,
-    )
+    ).unwrap()
 }
 // Lemma cast_stack_r : forall {nTop mTop nBot nBot' mBot mBot'} prfnBot prfmBot prfn prfm
 //                           (zxTop : ZX nTop mTop) (zxBot : ZX nBot mBot),
@@ -545,7 +545,7 @@ where
             ZXParam::new(simple_symbol("nBot"), simple_symbol("mBot"), "zxBot"),
         ],
         true,
-    )
+    ).unwrap()
 }
 
 // Lemma cast_contract_l : forall {n m n0 m0 n1 m1} prfn0 prfm0 prfn1 prfm1 prfn prfm
@@ -588,7 +588,7 @@ where
         },
         vec![],
         false,
-    )
+    ).unwrap()
 }
 
 // Lemma cast_X :
@@ -621,7 +621,7 @@ where
         },
         vec![],
         false,
-    )
+    ).unwrap()
 }
 
 // Lemma cast_n_stack1 : forall {n n'} prfn prfm (zx : ZX 1 1),
@@ -655,7 +655,7 @@ where
         },
         vec![],
         false,
-    )
+    ).unwrap()
 }
 // Lemma cast_n_box : forall {n n'} prfn prfm,
 //   cast n' n' prfn prfm (n_box n) = n_box n'.
@@ -682,7 +682,7 @@ where
         },
         vec![],
         true,
-    )
+    ).unwrap()
 }
 
 fn x_0_wire<T>() -> Lemma<T>
@@ -703,7 +703,7 @@ where
         },
         vec![],
         true,
-    )
+    ).unwrap()
 }
 fn Z_abs_fusion<T>() -> Lemma<T>
 where
@@ -733,7 +733,7 @@ where
         },
         vec![],
         false,
-    )
+    ).unwrap()
 }
 
 fn X_abs_fusion<T>() -> Lemma<T>
@@ -764,5 +764,5 @@ where
         },
         vec![],
         false,
-    )
+    ).unwrap()
 }

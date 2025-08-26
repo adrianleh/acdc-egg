@@ -1,13 +1,13 @@
-use crate::vyzxlemma::{generate_rw_from_lemma, Lemma, LemmaContainer};
+use crate::vyzxlemma::{Lemma, LemmaContainer, generate_rw_from_lemma};
 use crate::vyzxrules::{vyzx_rules, vyzx_rws};
-use crate::{dep_rules, dim_rules, run_with_problem, ConstantFolding, Directional, ACDC};
-use actix_web::{guard, web, App, HttpServer};
+use crate::{ACDC, ConstantFolding, Directional, dep_rules, dim_rules, run_with_problem};
+use actix_web::{App, HttpServer, guard, web};
 use egg::Rewrite;
 use jsonrpc_v2::{Data, Error, Params, ResponseObjects, Server};
 use serde_derive::Deserialize;
 use std::ops::DerefMut;
 use std::sync::{Arc, Mutex};
-use tokio::io::{self, stdin, AsyncBufReadExt, AsyncReadExt};
+use tokio::io::{self, AsyncBufReadExt, AsyncReadExt, stdin};
 
 struct SharedState {
     rules: Vec<Rewrite<ACDC, ConstantFolding>>,
@@ -22,21 +22,30 @@ impl SharedState {
         }
     }
 
-    fn add_lemmas(&mut self, lemmas: Vec<Directional>) -> i64 {
-        let new_lemmas: Vec<Lemma<ConstantFolding>> = lemmas
+    fn add_lemmas(&mut self, lemmas: Vec<Directional>) -> Result<i64, String> {
+        let new_lemmas: Vec<_> = lemmas
             .into_iter()
             .map(|l| generate_rw_from_lemma(l))
             .collect();
+        let errs = new_lemmas
+            .clone()
+            .into_iter()
+            .filter(|l| l.is_err())
+            .map(|e| e.err().unwrap())
+            .collect::<Vec<_>>();
+        if !errs.is_empty() {
+            return Err(errs.join(","));
+        }
         new_lemmas
             .clone()
             .into_iter()
-            .for_each(|l| self.lemma_container.deref_mut().add(l));
+            .for_each(|l| self.lemma_container.deref_mut().add(l.unwrap()));
         let new_rules: Vec<_> = new_lemmas
             .into_iter()
-            .flat_map(|l| l.get_rewrites())
+            .flat_map(|l| l.unwrap().get_rewrites())
             .collect();
         self.rules.extend(new_rules);
-        self.rules.len() as i64
+        Ok(self.rules.len() as i64)
     }
 
     fn clear_lemmas(&mut self) -> i64 {
@@ -55,7 +64,6 @@ impl SharedState {
     }
 }
 
-
 #[derive(Deserialize)]
 #[serde(untagged)]
 enum DirectionalParam {
@@ -72,7 +80,11 @@ async fn add(
         DirectionalParam::Single(v) => v,
         DirectionalParam::Nested(vv) => vv.into_iter().flatten().collect(),
     };
-    Ok(state.add_lemmas(params))
+    let res = state.add_lemmas(params);
+    if res.is_ok() {
+        return Ok(res.unwrap());
+    }
+    Err(Error::internal(res.err().unwrap()))
 }
 
 async fn clear(data: Data<Arc<Mutex<SharedState>>>) -> Result<i64, Error> {

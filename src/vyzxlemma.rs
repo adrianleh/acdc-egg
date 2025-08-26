@@ -9,6 +9,7 @@ use serde_derive::{Deserialize, Serialize};
 use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
+use std::io::Error;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -931,7 +932,7 @@ fn get_params_from_lemma(
     }
 }
 
-pub fn generate_rw_from_lemma<T>(directional_lemma: Directional) -> Lemma<T>
+pub fn generate_rw_from_lemma<T>(directional_lemma: Directional) -> Result<Lemma<T>, String>
 where
     T: Analysis<ACDC> + Clone + 'static + Debug,
 {
@@ -962,7 +963,7 @@ pub fn generate_rw<T>(
     rhs: &ACDCZX,
     params: Vec<ZXParam>,
     bidirectional: bool,
-) -> Lemma<T>
+) -> Result<Lemma<T>, String>
 where
     T: Analysis<ACDC> + Clone + 'static + Debug,
 {
@@ -997,14 +998,14 @@ where
         match cond {
             Constr::Eq(c) => eq_conditions.push(c),
             Constr::False(_) => {
-                return Lemma {
+                return Ok(Lemma {
                     name: name.to_string(),
                     lhs: Box::new(lhs.clone()),
                     rhs: Box::new(rhs.clone()),
                     params,
                     bidirectional,
                     rewrites: vec![],
-                };
+                });
             } // If there is an unsatisfiable condition, we can't generate rewrites
         }
     }
@@ -1024,7 +1025,11 @@ where
         condition: cond.clone(),
         applier: r_pattern.clone(),
     };
-    let rw = Rewrite::new(name, l_pattern.clone(), r_cond).unwrap();
+    let rw_opt = Rewrite::new(name, l_pattern.clone(), r_cond);
+    if rw_opt.is_err() {
+        return Err(rw_opt.err().unwrap());
+    }
+    let rw = rw_opt.unwrap();
     let rws;
     if !bidirectional {
         rws = vec![rw];
@@ -1041,14 +1046,14 @@ where
         .unwrap();
         rws = vec![rw, rw_back];
     }
-    Lemma {
+    Ok(Lemma {
         name: name.to_string(),
         lhs: Box::new(lhs.clone()),
         rhs: Box::new(rhs.clone()),
         params,
         bidirectional,
         rewrites: rws,
-    }
+    })
 }
 
 #[derive(Debug, Clone)]
