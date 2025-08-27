@@ -28,20 +28,23 @@ def send_json_to_endpoint(data, endpoint="http://localhost:8080/api"):
   
 def find_minimal_lemmas(data, endpoint="http://localhost:8080/api"):
   lemmas_list = data["params"][0]
+  last_err = data
   left, right = 0, len(lemmas_list)
-  minimal_set = lemmas_list[:]
   while left < right:
     mid = (left + right) // 2
     sub_data = get_sublemmas(data, left, right)
     result = send_json_to_endpoint(sub_data, endpoint)
-    print(result, file=sys.stderr)
-    print("-----------------", file=sys.stderr)
+    # print(result, file=sys.stderr)
     if result and "error" in result:
-      minimal_set = sub_data["params"][0]
+      print("SETTNG last_err", file=sys.stderr)
+      last_err = sub_data
       right = mid
     else:
+      print("NOT SETTING last_err", file=sys.stderr)
       left = mid + 1
-  return sub_data
+    print("-----------------", file=sys.stderr)
+  print(f"Final minimal error-inducing subset: {last_err}", file=sys.stderr)
+  return last_err
 
 
 if __name__ == "__main__":

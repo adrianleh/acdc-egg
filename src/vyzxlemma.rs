@@ -1016,15 +1016,16 @@ where
     let replaced_rhs = &params.iter().fold(rhs.clone(), |acc, param| {
         replace_param_with_dep_zx(&acc, &param)
     });
-    println!("------");
-    println!("{}", name);
-    println!("{:?} - {:?}", lhs, replaced_lhs);
-    println!("{:?} - {:?}", rhs, replaced_rhs);
-    println!("------");
+    eprintln!("------");
+    eprintln!("{}", name);
+    eprintln!("{:?} - {:?}", lhs, replaced_lhs);
+    eprintln!("{:?} - {:?}", rhs, replaced_rhs);
     let mut all_symbols_in_exprs = collect_dim_symbols(replaced_lhs);
     all_symbols_in_exprs.extend(collect_dim_symbols(replaced_rhs));
     let l_pattern: Pattern<ACDC> = acdczx_to_pattern(replaced_lhs).as_str().parse().unwrap();
     let r_pattern: Pattern<ACDC> = acdczx_to_pattern(replaced_rhs).as_str().parse().unwrap();
+    eprintln!("{} => {}", acdczx_to_pattern(replaced_lhs), acdczx_to_pattern(replaced_rhs));
+    eprintln!("------");
     let mut conditions = get_all_conditions(&params);
     conditions.extend(get_param_to_symbol_constraints(
         &params,
@@ -1127,6 +1128,8 @@ where
         self.lemmas.clear();
     }
 
+    
+    
     pub fn get(&self, name: &String) -> Option<Box<Lemma<T>>> {
         if name.ends_with(REVERSE_LEMMA_SUFFIX) {
             let lemma = self
@@ -1163,7 +1166,7 @@ where
         if prf.name == "nwire_removal_l" {
             eprintln!("Found nwire_removal_l, returning params");
         }
-        Some(lemma.get_params_and_side(candidate, prf.direction != Forward))
+        Some(lemma.get_params_and_side(candidate, prf.direction == Forward))
     }
 }
 

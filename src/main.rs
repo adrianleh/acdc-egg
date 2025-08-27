@@ -83,7 +83,7 @@ fn run_with_json(json: &str) {
     rules.extend(dim_rules());
     // println!("{:?}", vyzx_rules::<ConstantFolding>());
     rules.extend(dep_rules());
-    run_with_problem(&zx, &rules);
+    run_with_problem(&zx, &rules, &LemmaContainer::new(vyzx_rules())).unwrap();
 }
 
 #[derive(Debug, Clone)]
@@ -146,7 +146,7 @@ impl Display for ACDCTiming {
     }
 }
 
-fn run_with_problem(zx: &Lemma, rules: &Vec<Rewrite<ACDC, ConstantFolding>>) -> String {
+fn run_with_problem(zx: &Lemma, rules: &Vec<Rewrite<ACDC, ConstantFolding>>, lemmas: &LemmaContainer<ConstantFolding>) -> Result<String, String> {
     // let val_a = "(val n1 (* 1 m1) a)";
     // let val_b = "(val (+ 0 m1) o1 b)";
     // let val_c = "(val n2 m2 c)";
@@ -162,7 +162,6 @@ fn run_with_problem(zx: &Lemma, rules: &Vec<Rewrite<ACDC, ConstantFolding>>) -> 
     // );
     let expr = acdczx_to_pattern(&zx.prop.l).parse().unwrap();
     let goal = acdczx_to_pattern(&zx.prop.r).parse().unwrap();
-    let lemmas = LemmaContainer::new(vyzx_rules());
 
     let start_time = std::time::Instant::now();
     let mut runner = Runner::<ACDC, ConstantFolding, ()>::default()
@@ -175,15 +174,23 @@ fn run_with_problem(zx: &Lemma, rules: &Vec<Rewrite<ACDC, ConstantFolding>>) -> 
     let run_time = end_time.duration_since(start_time);
     let expr_id = runner.egraph.add_expr(&expr);
     let res = runner.egraph.add_expr(&goal);
-    assert_eq!(runner.egraph.find(expr_id), runner.egraph.find(res),);
-    // for (i, node) in runner.egraph.nodes().iter().enumerate() {
-    //     println!(
-    //         "{}: {:?} -> {:?}",
-    //         i,
-    //         node,
-    //         runner.egraph.id_to_node(runner.egraph.find(Id::from(i)))
-    //     );
-    // }
+    if runner.egraph.find(expr_id) !=  runner.egraph.find(res)
+    {
+        return Err("Failed to prove equality".to_string());
+    }
+    for (i, node) in runner.egraph.nodes().iter().enumerate() {
+        let target_id = runner.egraph.find(Id::from(i));
+        let children = node.children();
+        let children_str = children.iter().map(|id| format!("{:?}", id)).collect::<Vec<_>>().join(", ");
+        println!(
+            "{}: {:?} -> {:?} (#{}) (children: [{}])",
+            i,
+            node,
+            runner.egraph.id_to_node(target_id),
+            target_id,
+            children_str
+        );
+    }
 
     eprintln!("Explaining...");
     let start_expl_time = std::time::Instant::now();
@@ -192,35 +199,15 @@ fn run_with_problem(zx: &Lemma, rules: &Vec<Rewrite<ACDC, ConstantFolding>>) -> 
     // eprintln!("Flattening...");
     // eprintln!("Converting...");
     let mut wrap_exprs = vec![];
-    let get_first_enode = |id| (&runner).egraph[id].nodes[0].clone();
+    let get_first_enode = |id| (&runner).egraph.id_to_node(id).clone();
 
-    // let n0 = runner.egraph.id_to_node(Id::from(0)).build_recexpr(get_first_enode);
-    // let n4 = runner.egraph.id_to_node(Id::from(4)).build_recexpr(get_first_enode);
-    // eprintln!("n0, n4: {:?} {:?}", n0, n4);
-    // let mut expl2 = runner.explain_equivalence(&n0, &n4);
-    // eprintln!("expl2 l: {:}", expl2.get_tree_size());
-    // let fe2 = expl2.make_flat_explanation();
-    // let fe2profs = fe2.iter().map(|x| {
-    //     let serfe2 = SerFlatTermWrap::from(
-    //         n0.clone(),
-    //         n4.clone(),
-    //         fe2[1].clone(),
-    //         &runner.egraph,
-    //         &lemmas,
-    //     );
-    //     serfe2.get_proof().unwrap().name
-    // }).collect::<Vec<_>>();
-    // eprintln!("FE2: {:}", serde_json::to_string_pretty(&fe2profs).unwrap());
-    // exit(1);
 
     let flat_explanations: Vec<_> = expl.make_flat_explanation().to_vec();
     let end_expl_time = std::time::Instant::now();
     let expl_time = end_expl_time.duration_since(start_expl_time);
     let start_conv_time = std::time::Instant::now();
     eprintln!("flat_explanations size: {:}", flat_explanations.len());
-    eprintln!("prev node : {:?}", &runner.egraph.id_to_node(expr_id));
-    eprintln!("prev node 4: {:?}", &runner.egraph.id_to_node(4.into()));
-    eprintln!("prev node 0: {:?}", &runner.egraph.id_to_node(0.into()));
+    eprintln!("prev node (#{}) : {:?}", expr_id, &runner.egraph.id_to_node(expr_id));
     let mut prev = runner
         .egraph
         .id_to_node(expr_id)
@@ -242,7 +229,7 @@ fn run_with_problem(zx: &Lemma, rules: &Vec<Rewrite<ACDC, ConstantFolding>>) -> 
     let conversion_time = end_conv_time.duration_since(start_conv_time);
     let timing = ACDCTiming::new(zx.name.clone(), run_time, expl_time, conversion_time);
     let result = ACDCResult::new(wrap_exprs, timing.clone());
-    serde_json::to_string_pretty(&result).unwrap().to_string()
+    Ok(serde_json::to_string_pretty(&result).unwrap().to_string())
 }
 
 fn dim_rules<T>() -> Vec<Rewrite<ACDC, T>>
@@ -467,7 +454,7 @@ pub enum ACDCDim {
     },
     Dep1 {
         zx: Box<ACDCZX>,
-    }, // TODO: Implement translation when dealing with ingestion from serialized strings
+    },
     Dep2 {
         zx: Box<ACDCZX>,
     },

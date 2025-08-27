@@ -283,8 +283,6 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
     where
         S: Serializer,
     {
-        let fwd_rule = &self.term.forward_rule.map(|x| x.to_string());
-        let bwd_rule = &self.term.backward_rule.map(|x| x.to_string());
         let mut state = serializer.serialize_struct("SerFlatTermWrap", 5)?;
         let proof = self.get_proof();
         state.serialize_field("proof", &proof)?;
@@ -324,7 +322,7 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
                         );
                         let subtree = lemma.build_subtree_from_application(
                             &acdczx,
-                            proof.unwrap().direction != Backward,
+                            proof.unwrap().direction == Backward,
                         );
                         eprintln!("Rewrite at idx for {}", rule_name);
                         let (idx, has_idx) = rewrite_at_idx(&prev, &new, &subtree);

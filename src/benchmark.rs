@@ -48,7 +48,7 @@ fn benchmark_assoc(n: u32) {
         .with_iter_limit(usize::MAX)
         .run(&rules);
     let end_time = std::time::Instant::now();
-    println!(
+    eprintln!(
         "{},{}",
         n,
         end_time.duration_since(start_time).as_millis()

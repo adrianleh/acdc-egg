@@ -5,7 +5,7 @@ use actix_web::{App, HttpServer, guard, web};
 use egg::Rewrite;
 use jsonrpc_v2::{Data, Error, Params, ResponseObjects, Server};
 use serde_derive::Deserialize;
-use std::ops::DerefMut;
+use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 use tokio::io::{self, AsyncBufReadExt, AsyncReadExt, stdin};
 
@@ -56,10 +56,7 @@ impl SharedState {
 
     fn default_lemmas(&mut self) -> i64 {
         self.lemma_container = Box::new(LemmaContainer::new(vyzx_rules()));
-        let mut rules = vyzx_rws();
-        rules.extend(dim_rules());
-        rules.extend(dep_rules());
-        self.rules = rules;
+        self.rules = vyzx_rws();
         self.rules.len() as i64
     }
 }
@@ -119,8 +116,14 @@ async fn run(
     params: Params<crate::Lemma>,
 ) -> Result<String, Error> {
     let state = data.lock().unwrap();
-    let result = run_with_problem(&params.0, &state.rules);
-    Ok(result)
+    let mut rules = state.rules.clone();
+    rules.extend(dim_rules());
+    rules.extend(dep_rules());
+    let result = run_with_problem(&params.0, &rules, state.lemma_container.deref());
+    if result.is_err() {
+        return Err(Error::internal(result.err().unwrap()));
+    }
+    Ok(result.unwrap())
 }
 
 pub async fn tokio_main(http: bool) {
