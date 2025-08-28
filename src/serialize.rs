@@ -359,14 +359,14 @@ impl<'a, T: Analysis<ACDC> + Clone + Debug + 'static> ACDCResult<'a, T> {
     }
 }   
 
-impl<'a, T: Analysis<ACDC> + Clone + Debug + 'static> Ser for ACDCResult<'a, T> {
+impl<'a, T: Analysis<ACDC> + Clone + Debug + 'static> Ser for ACDCResult<'a, T> { // Can't derive since ConstantFolding doesn't implement Serialize
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         let mut state = serializer.serialize_struct("Result", 3)?;
         state.serialize_field("expl", &self.expl)?;
-        state.serialize_field("expl_time", &self.timing)?;
+        state.serialize_field("timing", &self.timing)?;
         state.end()
     }
 }

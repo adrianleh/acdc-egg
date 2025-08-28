@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 extern crate alloc;
 
 mod benchmark;
@@ -40,7 +42,16 @@ async fn main() {
         return;
     }
     let http = args.get(1) == Some(&"--http".to_string());
-    tokio_main(http).await;
+    let mut port = None;
+    if http {
+        port = Some(
+            args.get(2)
+                .unwrap_or(&"3030".to_string())
+                .parse::<u16>()
+                .unwrap_or_else(|_| panic!("Invalid port number")),
+        );
+    }
+    tokio_main(http, port).await;
 }
 fn legacy_main() {
     let args: Vec<String> = std::env::args().collect();
@@ -89,9 +100,9 @@ fn run_with_json(json: &str) {
 #[derive(Debug, Clone)]
 pub struct ACDCTiming {
     pub name: Option<String>,
-    pub run_time: Duration,
-    pub explain_time: Duration,
-    pub conversion_time: Duration,
+    pub run_time: u128,
+    pub explain_time: u128,
+    pub conversion_time: u128,
 }
 impl ACDCTiming {
     pub fn new(
@@ -102,9 +113,9 @@ impl ACDCTiming {
     ) -> Self {
         Self {
             name,
-            run_time,
-            explain_time,
-            conversion_time,
+            run_time: run_time.as_millis(),
+            explain_time: explain_time.as_millis(),
+            conversion_time: conversion_time.as_millis(),
         }
     }
 }
@@ -128,25 +139,29 @@ impl Display for ACDCTiming {
         if self.name.is_none() {
             let str = format!(
                 "Run time: {}ms\nExplain time: {}ms\nConversion time: {}ms",
-                self.run_time.as_millis(),
-                self.explain_time.as_millis(),
-                self.conversion_time.as_millis()
+                self.run_time,
+                self.explain_time,
+                self.conversion_time
             );
             write!(f, "{}", str)
         } else {
             let str = format!(
                 "Timing for {}:\nRun time: {}ms\nExplain time: {}ms\nConversion time: {}ms",
                 self.name.clone().unwrap(),
-                self.run_time.as_millis(),
-                self.explain_time.as_millis(),
-                self.conversion_time.as_millis()
+                self.run_time,
+                self.explain_time,
+                self.conversion_time
             );
             write!(f, "{}", str)
         }
     }
 }
 
-fn run_with_problem(zx: &Lemma, rules: &Vec<Rewrite<ACDC, ConstantFolding>>, lemmas: &LemmaContainer<ConstantFolding>) -> Result<String, String> {
+fn run_with_problem(
+    zx: &Lemma,
+    rules: &Vec<Rewrite<ACDC, ConstantFolding>>,
+    lemmas: &LemmaContainer<ConstantFolding>,
+) -> Result<String, String> {
     // let val_a = "(val n1 (* 1 m1) a)";
     // let val_b = "(val (+ 0 m1) o1 b)";
     // let val_c = "(val n2 m2 c)";
@@ -174,15 +189,18 @@ fn run_with_problem(zx: &Lemma, rules: &Vec<Rewrite<ACDC, ConstantFolding>>, lem
     let run_time = end_time.duration_since(start_time);
     let expr_id = runner.egraph.add_expr(&expr);
     let res = runner.egraph.add_expr(&goal);
-    if runner.egraph.find(expr_id) !=  runner.egraph.find(res)
-    {
+    if runner.egraph.find(expr_id) != runner.egraph.find(res) {
         return Err("Failed to prove equality".to_string());
     }
     for (i, node) in runner.egraph.nodes().iter().enumerate() {
         let target_id = runner.egraph.find(Id::from(i));
         let children = node.children();
-        let children_str = children.iter().map(|id| format!("{:?}", id)).collect::<Vec<_>>().join(", ");
-        println!(
+        let children_str = children
+            .iter()
+            .map(|id| format!("{:?}", id))
+            .collect::<Vec<_>>()
+            .join(", ");
+        eprintln!(
             "{}: {:?} -> {:?} (#{}) (children: [{}])",
             i,
             node,
@@ -201,13 +219,16 @@ fn run_with_problem(zx: &Lemma, rules: &Vec<Rewrite<ACDC, ConstantFolding>>, lem
     let mut wrap_exprs = vec![];
     let get_first_enode = |id| (&runner).egraph.id_to_node(id).clone();
 
-
     let flat_explanations: Vec<_> = expl.make_flat_explanation().to_vec();
     let end_expl_time = std::time::Instant::now();
     let expl_time = end_expl_time.duration_since(start_expl_time);
     let start_conv_time = std::time::Instant::now();
     eprintln!("flat_explanations size: {:}", flat_explanations.len());
-    eprintln!("prev node (#{}) : {:?}", expr_id, &runner.egraph.id_to_node(expr_id));
+    eprintln!(
+        "prev node (#{}) : {:?}",
+        expr_id,
+        &runner.egraph.id_to_node(expr_id)
+    );
     let mut prev = runner
         .egraph
         .id_to_node(expr_id)
@@ -598,4 +619,3 @@ pub struct Directional {
     pub direction: Direction,
     pub simplification: bool,
 }
-
