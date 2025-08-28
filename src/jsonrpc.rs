@@ -3,11 +3,17 @@ use crate::vyzxrules::{vyzx_rules, vyzx_rws};
 use crate::{ACDC, ConstantFolding, Directional, dep_rules, dim_rules, run_with_problem};
 use actix_web::{App, HttpServer, guard, web};
 use egg::Rewrite;
-use jsonrpc_v2::{Data, Error, Params, ResponseObjects, Server};
+use jsonrpc_v2::{Data, Error, Params, ResponseObject, ResponseObjects, Server};
 use serde_derive::Deserialize;
+use std::io::Write;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 use tokio::io::{self, AsyncBufReadExt, AsyncReadExt, stdin};
+
+#[cfg(windows)]
+const LINE_ENDING: &'static str = "\r\n";
+#[cfg(not(windows))]
+const LINE_ENDING: &'static str = "\n";
 
 struct SharedState {
     rules: Vec<Rewrite<ACDC, ConstantFolding>>,
@@ -126,7 +132,17 @@ async fn run(
     Ok(result.unwrap())
 }
 
-pub async fn tokio_main(http: bool) {
+fn print_response(res: &ResponseObject) {
+    let res_str = serde_json::to_string(res).unwrap();
+
+    let len = res_str.len();
+
+    let mut stdout = std::io::stdout();
+    write!(stdout, "Content-Length: {}\r\n\r\n{}", len, res_str).unwrap();
+    stdout.flush().unwrap();
+}
+
+pub async fn tokio_main(http: bool, port: Option<u16>) {
     let state = Arc::new(Mutex::new(SharedState::new()));
     let data = Data::new(state);
     let rpc = Server::new()
@@ -138,8 +154,8 @@ pub async fn tokio_main(http: bool) {
         .with_method("run_problem", run)
         .finish();
     if http {
-        const address: &str = "0.0.0.0:8080";
-        eprintln!("Starting JSON-RPC server on {}", address);
+        let address: String = "0.0.0.0:".to_string() + &port.unwrap_or(3030).to_string();
+        eprintln!("Starting JSON-RPC server on {}", address.as_str());
         let _ = HttpServer::new(move || {
             let rpc = rpc.clone();
             App::new().service(
@@ -148,7 +164,7 @@ pub async fn tokio_main(http: bool) {
                     .finish(rpc.into_web_service()),
             )
         })
-        .bind(address)
+        .bind(address.as_str())
         .unwrap()
         .run()
         .await;
@@ -200,14 +216,10 @@ pub async fn tokio_main(http: bool) {
         let response_objects = rpc.handle(body_buf.as_slice()).await;
         match response_objects {
             ResponseObjects::One(res) => {
-                let res_str = serde_json::to_string(&res).unwrap();
-                println!("Content-Length: {}\r\n\r\n{}", res_str.len(), res_str);
+                print_response(&res);
             }
             ResponseObjects::Many(res_vec) => {
-                for res in res_vec {
-                    let res_str = serde_json::to_string(&res).unwrap();
-                    println!("Content-Length: {}\r\n\r\n{}", res_str.len(), res_str);
-                }
+                res_vec.into_iter().for_each(|res| print_response(&res));
             }
             ResponseObjects::Empty => {
                 // For notifications, no response is sent.
