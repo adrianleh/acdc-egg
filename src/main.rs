@@ -610,6 +610,8 @@ pub struct Lemma {
     prop: Proportional,
     name: Option<String>,
     hyps: Vec<Hyp>,
+    total_arguments: u32,
+    inferred_arguments: Vec<u32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

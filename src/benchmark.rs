@@ -1,9 +1,6 @@
 use crate::vyzxlemma::acdczx_to_pattern;
 use crate::vyzxrules::compose_assoc;
-use crate::{
-    simple_lit, ConstantFolding, Lemma, Proportional, ACDC,
-    ACDCZX,
-};
+use crate::{ACDC, ACDCZX, ConstantFolding, Lemma, Proportional, simple_lit};
 use egg::Runner;
 
 fn build_l_assoc(base: &ACDCZX, n: u32) -> ACDCZX {
@@ -35,6 +32,8 @@ fn benchmark_assoc(n: u32) {
         name: Some(format!("assoc_{}", n).to_string()),
         prop,
         hyps: vec![],
+        total_arguments: 0,
+        inferred_arguments: vec![],
     };
     let rules = compose_assoc().get_rewrites();
     let expr = acdczx_to_pattern(&lemma.prop.l).parse().unwrap();
@@ -48,18 +47,11 @@ fn benchmark_assoc(n: u32) {
         .with_iter_limit(usize::MAX)
         .run(&rules);
     let end_time = std::time::Instant::now();
-    eprintln!(
-        "{},{}",
-        n,
-        end_time.duration_since(start_time).as_millis()
-    );
+    eprintln!("{},{}", n, end_time.duration_since(start_time).as_millis());
     let expr_id = runner.egraph.add_expr(&expr);
     let res = runner.egraph.add_expr(&goal);
     if runner.egraph.find(expr_id) != runner.egraph.find(res) {
-        panic!(
-            "Failed to find equality for assoc_{}.  ",
-            n,
-        );
+        panic!("Failed to find equality for assoc_{}.  ", n,);
     }
 }
 

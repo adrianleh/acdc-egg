@@ -5,7 +5,7 @@ use std::ops::Deref;
 // 1. Find largest diff resulting from rw
 // 2. Extract parameters from the diff
 // 3. Count how manyth instance the one matched upon was in the original
-fn largest_diff(a: &ACDCZX, b: &ACDCZX) -> Option<(ACDCZX, ACDCZX)> {
+pub fn largest_diff(a: &ACDCZX, b: &ACDCZX) -> Option<(ACDCZX, ACDCZX)> {
     if a == b {
         return None;
     }

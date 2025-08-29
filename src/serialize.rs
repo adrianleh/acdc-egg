@@ -1,6 +1,6 @@
 use crate::conv::acdc_to_acdc_zx_or_dim;
+use crate::diff::largest_diff;
 use crate::recexpr::recexpr_to_ACDC;
-use crate::serialize::Direction::Backward;
 use crate::subtrees::rewrite_at_idx;
 use crate::vyzxlemma::{LemmaContainer, REVERSE_LEMMA_SUFFIX};
 use crate::{ACDC, ACDCTiming};
@@ -260,12 +260,12 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> SerFlatTermWrap<'a, A> {
         if self.term.forward_rule.is_some() {
             Some(Proof::new(
                 self.term.forward_rule?.to_string(),
-                Direction::Forward,
+                Direction::Backward,
             ))
         } else if self.term.backward_rule.is_some() {
             Some(Proof::new(
                 self.term.backward_rule?.to_string(),
-                Direction::Backward,
+                Direction::Forward,
             ))
         } else {
             self.children()
@@ -283,13 +283,20 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
     where
         S: Serializer,
     {
-        let mut state = serializer.serialize_struct("SerFlatTermWrap", 5)?;
+        let mut state = serializer.serialize_struct("SerFlatTermWrap", 7)?;
         let proof = self.get_proof();
         state.serialize_field("proof", &proof)?;
         let mut arguments = vec![];
         let mut at = None;
+        let mut total_arguments = 0u32;
+        let mut inferred_arguments : Vec<u32>= vec![];
         if proof.is_some() {
             let rule_name = &proof.clone().unwrap().name;
+            let lemma = self.container.get(&rule_name);
+            if let Some(lemma) = lemma {
+                total_arguments = lemma.total_arguments;
+                inferred_arguments = lemma.inferred_arguments.clone();
+            }
             let acdc = &self.term.node;
             let acdczx = acdc_to_acdc_zx_or_dim(acdc, self.egraph);
             let prev = recexpr_to_ACDC(&self.prev_top);
@@ -304,30 +311,41 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
                         proof.clone().unwrap(),
                         acdczx
                     );
-                    let (raw_args, _) = self
-                        .container
-                        .get_match_side_args(&proof.clone().unwrap(), &acdczx)
-                        .or_else(|| Some((vec![], false)))
-                        .unwrap();
-                    let lemma = self.container.get(&rule_name);
-                    if let Some(lemma) = lemma {
-                        arguments = lemma.to_ordered_params(&raw_args);
+                    let largest_diff_opt = largest_diff(&prev, &new);
+                    if largest_diff_opt.is_none() {
                         eprintln!(
-                            "Raw args: {}",
-                            raw_args
-                                .iter()
-                                .map(|p| p.clone().name)
-                                .collect::<Vec<_>>()
-                                .join(",")
+                            "No difference found between prev and new:\n prev: {:?}\n new: {:?}\n",
+                            prev, new
                         );
-                        let subtree = lemma.build_subtree_from_application(
-                            &acdczx,
-                            proof.unwrap().direction == Backward,
-                        );
-                        eprintln!("Rewrite at idx for {}", rule_name);
-                        let (idx, has_idx) = rewrite_at_idx(&prev, &new, &subtree);
-                        if has_idx {
-                            at = Some(idx);
+                        arguments = vec![];
+                    } else {
+                        let largest_diff = largest_diff_opt.unwrap();
+                        eprintln!("Largest diff: {:?} vs {:?}", largest_diff.0, largest_diff.1);
+                        let (raw_args, _) = self
+                            .container
+                            .get_match_side_args(&proof.clone().unwrap(), &largest_diff.1)
+                            .or_else(|| Some((vec![], false)))
+                            .unwrap();
+                        let lemma = self.container.get(&rule_name);
+                        if let Some(lemma) = lemma {
+                            arguments = lemma.to_ordered_params(&raw_args);
+                            eprintln!(
+                                "Raw args: {}",
+                                raw_args
+                                    .iter()
+                                    .map(|p| p.clone().name)
+                                    .collect::<Vec<_>>()
+                                    .join(",")
+                            );
+                            let subtree = lemma.build_subtree_from_application(
+                                &acdczx,
+                                proof.unwrap().direction == Direction::Backward,
+                            );
+                            eprintln!("Rewrite at idx for {}", rule_name);
+                            let (idx, has_idx) = rewrite_at_idx(&prev, &new, &subtree);
+                            if has_idx {
+                                at = Some(idx);
+                            }
                         }
                     }
                 }
@@ -337,6 +355,8 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
         state.serialize_field("node", &recexpr_to_ACDC(&self.curr_top).get_zx())?;
         state.serialize_field("prev", &recexpr_to_ACDC(&self.prev_top).get_zx())?;
         state.serialize_field("at", &at)?;
+        state.serialize_field("total_arguments", &total_arguments)?;
+        state.serialize_field("inferred_arguments", &inferred_arguments)?;
         state.end()
     }
 }
@@ -352,14 +372,12 @@ where
 
 impl<'a, T: Analysis<ACDC> + Clone + Debug + 'static> ACDCResult<'a, T> {
     pub fn new(expl: Vec<SerFlatTermWrap<'a, T>>, timing: ACDCTiming) -> Self {
-        ACDCResult {
-            expl,
-            timing
-        }
+        ACDCResult { expl, timing }
     }
-}   
+}
 
-impl<'a, T: Analysis<ACDC> + Clone + Debug + 'static> Ser for ACDCResult<'a, T> { // Can't derive since ConstantFolding doesn't implement Serialize
+impl<'a, T: Analysis<ACDC> + Clone + Debug + 'static> Ser for ACDCResult<'a, T> {
+    // Can't derive since ConstantFolding doesn't implement Serialize
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,

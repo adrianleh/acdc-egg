@@ -1,11 +1,11 @@
-use crate::vyzxlemma::{Lemma, ZXParam, generate_rw};
-use crate::{ACDC, ACDCDim, ACDCZX, simple_lit, simple_symbol, simple_var};
+use crate::vyzxlemma::{generate_rw_without_extra_params, Lemma, ZXParam};
+use crate::{simple_lit, simple_symbol, simple_var, ACDCDim, ACDC, ACDCZX};
 use egg::{Analysis, Rewrite};
 use std::fmt::Debug;
 
 pub fn vyzx_rules<T>() -> Vec<Lemma<T>>
 where
-    T: Analysis<ACDC> + Clone + 'static + std::fmt::Debug,
+    T: Analysis<ACDC> + Clone + 'static + Debug,
 {
     let lemmata = vec![
         stack_assoc(),
@@ -49,7 +49,7 @@ pub fn stack_assoc<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone + Debug + 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "stack_assoc",
         &ACDCZX::Stack {
             a: Box::from(ACDCZX::Stack {
@@ -94,7 +94,7 @@ fn stack_assoc_back<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "stack_assoc_back",
         &ACDCZX::Stack {
             a: Box::from(simple_var("a")),
@@ -139,7 +139,7 @@ pub fn compose_assoc<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "compose_assoc",
         &ACDCZX::Compose {
             a: Box::from(simple_var("a")),
@@ -168,7 +168,7 @@ fn nwire_l<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "nwire_removal_l",
         &ACDCZX::Compose {
             a: Box::from(ACDCZX::NWire {
@@ -186,7 +186,7 @@ fn nwire_r<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "nwire_removal_r",
         &ACDCZX::Compose {
             a: Box::from(simple_var("zx")),
@@ -204,7 +204,7 @@ fn nwire_add<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "nwire_add",
         &ACDCZX::Stack {
             a: Box::from(ACDCZX::NWire {
@@ -229,7 +229,7 @@ fn wire_to_nwire<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone+Debug + 'static,
 {
-    let rw = generate_rw(
+    let rw = generate_rw_without_extra_params(
         "wire_to_n_wire",
         &ACDCZX::Val {
             val: String::from("Wire"),
@@ -247,7 +247,7 @@ fn empty_to_n_wire<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "empty_to_nwire",
         &ACDCZX::Val {
             val: String::from("Empty"),
@@ -264,7 +264,7 @@ fn stack_empty_top<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "empty_stack_top",
         &ACDCZX::Stack {
             a: Box::from(simple_var("zx")),
@@ -284,7 +284,7 @@ fn stack_empty_bot<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone+Debug + 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "empty_stack_bot",
         &ACDCZX::Stack {
             a: Box::from(ACDCZX::Val {
@@ -318,7 +318,7 @@ fn cast_id<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "cast_id",
         &ACDCZX::Cast {
             zx: Box::from(simple_var("zx")),
@@ -335,7 +335,7 @@ fn cast_contract<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "cast_contract",
         &ACDCZX::Cast {
             zx: Box::from(ACDCZX::Cast {
@@ -360,7 +360,7 @@ fn stack_compose_dist<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "stack_compose_distr",
         &ACDCZX::Stack {
             a: Box::from(ACDCZX::Compose {
@@ -398,7 +398,7 @@ fn stack_nwire_distribute_l<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "stack_nwire_distribute_l",
         &ACDCZX::Stack {
             a: Box::from(ACDCZX::NWire {
@@ -436,7 +436,7 @@ fn stack_nwire_distribute_r<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "stack_nwire_distribute_r",
         &ACDCZX::Compose {
             a: Box::from(ACDCZX::Compose {
@@ -477,7 +477,7 @@ fn cast_stack_l<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "cast_stack_l",
         &ACDCZX::Stack {
             a: Box::from(ACDCZX::Cast {
@@ -516,7 +516,7 @@ fn cast_stack_r<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "cast_stack_r",
         &ACDCZX::Stack {
             a: Box::from(simple_var("zxTop")),
@@ -570,7 +570,7 @@ fn cast_Z<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "cast_Z",
         &ACDCZX::Cast {
             n: simple_symbol("n1"),
@@ -603,7 +603,7 @@ fn cast_X<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone+Debug + 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "cast_X",
         &ACDCZX::Cast {
             n: simple_symbol("n1"),
@@ -641,7 +641,7 @@ fn cast_n_wire<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone+Debug + 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "cast_n_wire",
         &ACDCZX::Cast {
             n: simple_symbol("n1"),
@@ -668,7 +668,7 @@ fn z_0_wire<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone+Debug + 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "Z_0_is_wire",
         &ACDCZX::Z {
             n: simple_lit(1),
@@ -689,7 +689,7 @@ fn x_0_wire<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone+Debug + 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "X_0_is_wire",
         &ACDCZX::X {
             n: simple_lit(1),
@@ -709,7 +709,7 @@ fn Z_abs_fusion<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone+Debug + 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "Z_abs_fusion",
         &ACDCZX::Compose {
             a: Box::from(ACDCZX::Z {
@@ -740,7 +740,7 @@ fn X_abs_fusion<T>() -> Lemma<T>
 where
     T: Analysis<ACDC> + Clone +Debug+ 'static,
 {
-    generate_rw(
+    generate_rw_without_extra_params(
         "Z_abs_fusion",
         &ACDCZX::Compose {
             a: Box::from(ACDCZX::X {

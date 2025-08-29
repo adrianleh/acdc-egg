@@ -659,12 +659,13 @@ pub fn collect_dim_symbols(zx: &ACDCZX) -> HashSet<String> {
                 }
             }
             ret
-        },
+        }
         ACDCZX::NStack { n, zx } => {
             let mut ret = find_all_symbols_in_expr(n);
             ret.extend(collect_dim_symbols(zx));
             ret
-        } ,ACDCZX::NStack1 { n,zx } => {
+        }
+        ACDCZX::NStack1 { n, zx } => {
             let mut ret = find_all_symbols_in_expr(n);
             ret.extend(collect_dim_symbols(zx));
             ret
@@ -685,6 +686,8 @@ where
     lhs: Box<ACDCZX>,
     rhs: Box<ACDCZX>,
     params: Vec<ZXParam>,
+    pub total_arguments: u32,
+    pub inferred_arguments: Vec<u32>,
     bidirectional: bool,
     rewrites: Vec<Rewrite<ACDC, T>>,
 }
@@ -743,7 +746,7 @@ where
     }
 
     pub fn build_subtree_from_application(&self, node: &ACDCZX, rhs: bool) -> ACDCZX {
-        let (params, rhs) = self.get_params_and_side(node, !rhs);
+        let (params, rhs) = self.get_params_and_side(node, rhs);
         let base = if rhs {
             self.lhs.clone()
         } else {
@@ -836,7 +839,7 @@ fn get_params_from_lemma(
     params.iter().for_each(|param| {
         param_names.insert(param.name.clone());
     });
-    // eprintln!("{:?}\n-----\n{:?}", lemma_zx, matched);
+    eprintln!("{:?}\n-----\n{:?}", &lemma_zx, &matched);
     match (lemma_zx, matched) {
         (
             ACDCZX::Val {
@@ -908,11 +911,11 @@ fn get_params_from_lemma(
             ret.extend(a_matches?);
             ret.extend(b_matches?);
             Ok(ret)
-        },
-        (ACDCZX::NStack1 {n: n1, zx: zx1}, ACDCZX::NStack1 {n: n2, zx: zx2}) => {
+        }
+        (ACDCZX::NStack1 { n: n1, zx: zx1 }, ACDCZX::NStack1 { n: n2, zx: zx2 }) => {
             get_params_from_lemma(zx1, zx2, params)
         }
-        (ACDCZX::NStack {n: n1, zx: zx1}, ACDCZX::NStack {n: n2, zx: zx2}) => {
+        (ACDCZX::NStack { n: n1, zx: zx1 }, ACDCZX::NStack { n: n2, zx: zx2 }) => {
             get_params_from_lemma(zx1, zx2, params)
         }
         (
@@ -997,7 +1000,28 @@ where
             panic!("No full hypotheses supported yet");
         }
     }
-    generate_rw(name.as_str(), &lhs, &rhs, params, bidirectional)
+    generate_rw(
+        name.as_str(),
+        &lhs,
+        &rhs,
+        params,
+        bidirectional,
+        Some(directional_lemma.lemma.total_arguments),
+        Some(directional_lemma.lemma.inferred_arguments),
+    )
+}
+
+pub fn generate_rw_without_extra_params<T>(
+    name: &str,
+    lhs: &ACDCZX,
+    rhs: &ACDCZX,
+    params: Vec<ZXParam>,
+    bidirectional: bool,
+) -> Result<Lemma<T>, String>
+where
+    T: Analysis<ACDC> + Clone + 'static + Debug,
+{
+    generate_rw(name, lhs, rhs, params, bidirectional, None, None)
 }
 
 pub fn generate_rw<T>(
@@ -1006,6 +1030,8 @@ pub fn generate_rw<T>(
     rhs: &ACDCZX,
     params: Vec<ZXParam>,
     bidirectional: bool,
+    total_arguments: Option<u32>,
+    inferred_arguments: Option<Vec<u32>>,
 ) -> Result<Lemma<T>, String>
 where
     T: Analysis<ACDC> + Clone + 'static + Debug,
@@ -1024,7 +1050,11 @@ where
     all_symbols_in_exprs.extend(collect_dim_symbols(replaced_rhs));
     let l_pattern: Pattern<ACDC> = acdczx_to_pattern(replaced_lhs).as_str().parse().unwrap();
     let r_pattern: Pattern<ACDC> = acdczx_to_pattern(replaced_rhs).as_str().parse().unwrap();
-    eprintln!("{} => {}", acdczx_to_pattern(replaced_lhs), acdczx_to_pattern(replaced_rhs));
+    eprintln!(
+        "{} => {}",
+        acdczx_to_pattern(replaced_lhs),
+        acdczx_to_pattern(replaced_rhs)
+    );
     eprintln!("------");
     let mut conditions = get_all_conditions(&params);
     conditions.extend(get_param_to_symbol_constraints(
@@ -1042,6 +1072,7 @@ where
         match cond {
             Constr::Eq(c) => eq_conditions.push(c),
             Constr::False(_) => {
+                let min_args = params.len() as u32;
                 return Ok(Lemma {
                     name: name.to_string(),
                     lhs: Box::new(lhs.clone()),
@@ -1049,6 +1080,8 @@ where
                     params,
                     bidirectional,
                     rewrites: vec![],
+                    total_arguments: total_arguments.unwrap_or(min_args),
+                    inferred_arguments: inferred_arguments.unwrap_or(vec![]),
                 });
             } // If there is an unsatisfiable condition, we can't generate rewrites
         }
@@ -1090,6 +1123,7 @@ where
         .unwrap();
         rws = vec![rw, rw_back];
     }
+    let min_args = params.len() as u32;
     Ok(Lemma {
         name: name.to_string(),
         lhs: Box::new(lhs.clone()),
@@ -1097,6 +1131,8 @@ where
         params,
         bidirectional,
         rewrites: rws,
+        total_arguments: total_arguments.unwrap_or(min_args),
+        inferred_arguments: inferred_arguments.unwrap_or(vec![]),
     })
 }
 
@@ -1128,8 +1164,6 @@ where
         self.lemmas.clear();
     }
 
-    
-    
     pub fn get(&self, name: &String) -> Option<Box<Lemma<T>>> {
         if name.ends_with(REVERSE_LEMMA_SUFFIX) {
             let lemma = self
