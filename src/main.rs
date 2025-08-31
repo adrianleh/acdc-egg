@@ -17,8 +17,9 @@ mod vyzxrules;
 
 use crate::benchmark::benchmark;
 use crate::serialize::{ACDCResult, Direction, SerFlatTermWrap};
-use crate::vyzxlemma::{LemmaContainer, acdczx_to_pattern};
+use crate::vyzxlemma::{LemmaContainer, acdczx_to_pattern, to_acdc_expr, to_expl_acdc_expr, acdczx_to_expl_pattern};
 use crate::vyzxrules::{vyzx_rules, vyzx_rws};
+use actix_web::web::to;
 use alloc::string::String;
 use core::fmt::{Debug, Display};
 use egg::*;
@@ -30,6 +31,7 @@ use std::cmp::max;
 use std::io;
 use std::io::Read;
 use std::time::Duration;
+
 const TEST_STRING: &str = "@@@@@@@test@@@@@@@";
 #[tokio::main]
 async fn main() {
@@ -139,9 +141,7 @@ impl Display for ACDCTiming {
         if self.name.is_none() {
             let str = format!(
                 "Run time: {}ms\nExplain time: {}ms\nConversion time: {}ms",
-                self.run_time,
-                self.explain_time,
-                self.conversion_time
+                self.run_time, self.explain_time, self.conversion_time
             );
             write!(f, "{}", str)
         } else {
@@ -175,23 +175,39 @@ fn run_with_problem(
     //     "(compose (stack {} (compose {} {})) (stack {} {}))",
     //     val_a, n_wire_c, val_c, val_b, val_d
     // );
-    let expr = acdczx_to_pattern(&zx.prop.l).parse().unwrap();
-    let goal = acdczx_to_pattern(&zx.prop.r).parse().unwrap();
-
+    // TODO: Inject dep type constraints from lemma
+    let mut dim_hyp_rws: Vec<Rewrite<ACDC, ConstantFolding>> = vec![];
+    for hyp in &zx.hyps {
+        match hyp {
+            Hyp::DepHyp { name, n, m } => {
+                let dep1: Pattern<ACDC> = format!("(dep1 {})", name).parse().unwrap();
+                let dep2: Pattern<ACDC> =  format!("(dep2 {})", name).parse().unwrap();
+                let n_pattern: Pattern<ACDC> = to_expl_acdc_expr(n).as_str().parse().unwrap();
+                let m_pattern: Pattern<ACDC> = to_expl_acdc_expr(m).as_str().parse().unwrap();
+                eprintln!("Adding dep hyp rewrites for {}: {} -> {}, {} -> {}", name, dep1, n_pattern,dep2, m_pattern);
+                dim_hyp_rws.push(Rewrite::new(format!("dep-{}-n", name), dep1, n_pattern)?);
+                dim_hyp_rws.push(Rewrite::new(format!("dep-{}-m", name), dep2, m_pattern)?);
+            }
+            Hyp::HypProp { .. } => {}
+        }
+    }
+    let expr = acdczx_to_expl_pattern(&zx.prop.l).parse().unwrap();
+    let goal = acdczx_to_expl_pattern(&zx.prop.r).parse().unwrap();
+    eprintln!("Running problem : {} => {}", &expr, &goal);
+    let mut rules_and_hyps = rules.clone();
+    rules_and_hyps.extend(dim_hyp_rws);
     let start_time = std::time::Instant::now();
     let mut runner = Runner::<ACDC, ConstantFolding, ()>::default()
         .with_explanations_enabled()
         .with_expr(&expr)
         .with_expr(&goal)
         // .with_iter_limit(15)
-        .run(rules);
+        .run(&rules_and_hyps);
     let end_time = std::time::Instant::now();
     let run_time = end_time.duration_since(start_time);
     let expr_id = runner.egraph.add_expr(&expr);
     let res = runner.egraph.add_expr(&goal);
-    if runner.egraph.find(expr_id) != runner.egraph.find(res) {
-        return Err("Failed to prove equality".to_string());
-    }
+
     for (i, node) in runner.egraph.nodes().iter().enumerate() {
         let target_id = runner.egraph.find(Id::from(i));
         let children = node.children();
@@ -208,6 +224,10 @@ fn run_with_problem(
             target_id,
             children_str
         );
+    }
+
+    if runner.egraph.find(expr_id) != runner.egraph.find(res) {
+        return Err("Failed to prove equality".to_string());
     }
 
     eprintln!("Explaining...");
@@ -287,6 +307,10 @@ where
         rewrite!("dep-m-compose"; "(dep2 (compose ?a ?b))" => "(dep2 ?b)"),
         rewrite!("dep-n-cast"; "(dep1 (cast ?a ?b ?c))" => "(dep1 ?a)"),
         rewrite!("dep-m-cast"; "(dep2 (cast ?a ?b ?c))" => "(dep2 ?b)"),
+        rewrite!("dep-n-nstack"; "(dep1 (nstack ?a ?b))" => "(* ?a (dep1 ?b))"),
+        rewrite!("dep-m-nstack"; "(dep2 (nstack ?a ?b))" => "(* ?a (dep2 ?b))"),
+        rewrite!("dep-n-nstack1"; "(dep1 (nstack1 ?a ?b))" => "?a"),
+        rewrite!("dep-m-nstack1"; "(dep2 (nstack1 ?a ?b))" => "?a"),
     ]
 }
 // if {

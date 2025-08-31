@@ -67,6 +67,33 @@ struct ACDCDimConstraint {
     unsat: bool,
 }
 
+pub fn to_expl_acdc_expr(dim: &ACDCDim) -> String { //TODO: Merge with to_acdc_expr (no time before deadline)
+    match dim {
+        ACDCDim::Lit { lit } => lit.to_string(),
+        ACDCDim::Symbol { symbol: s } => {
+            format!("{}", s.to_string())
+        }
+        ACDCDim::Add { a, b } => format!("(+ {} {})", to_expl_acdc_expr(a), to_expl_acdc_expr(b)),
+        ACDCDim::Mul { a, b } => format!("(* {} {})", to_expl_acdc_expr(a), to_expl_acdc_expr(b)),
+        ACDCDim::Sub { a, b } => format!("(- {} {})", to_expl_acdc_expr(a), to_expl_acdc_expr(b)),
+        ACDCDim::Fn { fn_name, args } => format!(
+            "(Fn {} {})",
+            fn_name,
+            args.iter()
+                .map(to_expl_acdc_expr)
+                .collect::<Vec<String>>()
+                .join(" ")
+        ),
+        ACDCDim::Dep1 { zx } => {
+            format!("(dep1 {})", acdczx_to_expl_pattern(&*zx))
+        }
+        ACDCDim::Dep2 { zx } => {
+            format!("(dep2 {})", acdczx_to_expl_pattern(&*zx))
+        }
+    }
+}
+
+
 pub fn to_acdc_expr(dim: &ACDCDim) -> String {
     match dim {
         ACDCDim::Lit { lit } => lit.to_string(),
@@ -142,10 +169,11 @@ fn replace_dims_in_zx(zx: &ACDCZX, replace: &ACDCDim, with: &ACDCDim) -> ACDCZX 
         ACDCZX::Cast { n, m, zx } => {
             let n = replace_dim_subtree(n, replace, with);
             let m = replace_dim_subtree(m, replace, with);
+            let zx = replace_dims_in_zx(zx, replace, with);
             ACDCZX::Cast {
                 n,
                 m,
-                zx: zx.clone(),
+                zx: Box::new(zx),
             }
         }
         ACDCZX::Val { n, m, val } => {
@@ -210,16 +238,18 @@ fn replace_dims_in_zx(zx: &ACDCZX, replace: &ACDCDim, with: &ACDCDim) -> ACDCZX 
         }
         ACDCZX::NStack { n, zx } => {
             let n = replace_dim_subtree(n, replace, with);
+            let zx = replace_dims_in_zx(zx, replace, with);
             ACDCZX::NStack {
                 n: Box::new(n),
-                zx: zx.clone(),
+                zx: Box::new(zx),
             }
         }
         ACDCZX::NStack1 { n, zx } => {
             let n = replace_dim_subtree(n, replace, with);
+            let zx = replace_dims_in_zx(zx, replace, with);
             ACDCZX::NStack1 {
                 n: Box::new(n),
-                zx: zx.clone(),
+                zx: Box::new(zx),
             }
         }
     }
@@ -454,6 +484,7 @@ fn get_all_conditions(params: &Vec<ZXParam>) -> Vec<Constr> {
     let mut ret = Vec::new();
     for (zxparam1, zxparam2) in all_combs {
         let constraints = gen_common_var_constraints(&zxparam1, &zxparam2);
+        eprintln!("Constraint: {:?}", constraints);
         for constr in constraints {
             let cond = dim_constr_to_cond_eq(
                 zxparam1.name.as_str(),
@@ -483,8 +514,8 @@ fn dim_constr_to_cond_eq(l_name: &str, r_name: &str, constr: &ACDCDimConstraint)
 
     let mut e0 = exprs.0;
     let mut e1 = exprs.1;
-    // println!("{}", e0.as_str());
-    // println!("{}", e1.as_str());
+    eprintln!("{}", e0.as_str());
+    eprintln!("{}", e1.as_str());
     if constr.pos[0].pos.is_some() {
         let dep_arg_l = dep_type_str(
             constr.pos[0].pos.unwrap() + 1,
@@ -503,13 +534,13 @@ fn dim_constr_to_cond_eq(l_name: &str, r_name: &str, constr: &ACDCDimConstraint)
     } else {
         e1 = e1.replace(PLACEHOLDER, format!("?{}", r_name).as_str());
     }
-    // println!("{} {}", l_name, r_name);
-    // println!("{}", e0.as_str());
-    // println!("{}", e1.as_str());
-    // println!(
-    //     "{:?}",
-    //     ConditionEqualWrap::<ACDC>::new(e0.as_str().parse().unwrap(), e1.as_str().parse().unwrap(), )
-    // );
+    eprintln!("{} {}", l_name, r_name);
+    eprintln!("{}", e0.as_str());
+    eprintln!("{}", e1.as_str());
+    eprintln!(
+        "{:?}",
+        ConditionEqualWrap::<ACDC>::new(e0.as_str().parse().unwrap(), e1.as_str().parse().unwrap(), )
+    );
     Constr::Eq(ConditionEqualWrap::new(
         e0.as_str().parse().unwrap(),
         e1.as_str().parse().unwrap(),
@@ -607,6 +638,71 @@ pub fn acdczx_to_pattern(zx: &ACDCZX) -> String {
     }
 }
 
+
+pub fn zx_or_dim_expl_pattern(zd: &ZXOrDim) -> String {
+    match zd {
+        ZXOrDim::ZX(zx) => acdczx_to_expl_pattern(zx),
+        ZXOrDim::Dim(dim) => to_expl_acdc_expr(dim),
+    }
+}
+pub fn acdczx_to_expl_pattern(zx: &ACDCZX) -> String {
+    match zx {
+        ACDCZX::Val { val: s, n, m } => {
+            if n.is_none() && m.is_none() {
+                format!("{}", s)
+            } else {
+                format!(
+                    "(val {} {} {})",
+                    to_expl_acdc_expr(&n.clone().unwrap()),
+                    to_expl_acdc_expr(&m.clone().unwrap()),
+                    s
+                )
+            }
+        }
+        ACDCZX::Cast { n, m, zx } => format!(
+            "(cast {} {} {})",
+            to_expl_acdc_expr(n),
+            to_expl_acdc_expr(m),
+            acdczx_to_expl_pattern(zx)
+        ),
+        ACDCZX::Compose { a, b } => format!(
+            "(compose {} {})",
+            acdczx_to_expl_pattern(a),
+            acdczx_to_expl_pattern(b)
+        ),
+        ACDCZX::NWire { n } => format!("(nwire {})", to_expl_acdc_expr(n)),
+        ACDCZX::Stack { a, b } => {
+            format!("(stack {} {})", acdczx_to_expl_pattern(a), acdczx_to_expl_pattern(b))
+        }
+        ACDCZX::X { n, m, alpha: a } => format!(
+            "(X {} {} {})",
+            to_expl_acdc_expr(n),
+            to_expl_acdc_expr(m),
+            to_expl_acdc_expr(a)
+        ),
+        ACDCZX::Z { n, m, alpha: a } => format!(
+            "(Z {} {} {})",
+            to_expl_acdc_expr(n),
+            to_expl_acdc_expr(m),
+            to_expl_acdc_expr(a)
+        ),
+        ACDCZX::Fn { fn_name, args } => format!(
+            "(fn {} {})",
+            fn_name,
+            args.iter()
+                .map(zx_or_dim_expl_pattern)
+                .collect::<Vec<String>>()
+                .join(" ")
+        ),
+        ACDCZX::NStack { n, zx } => {
+            format!("(nstack {} {})", to_expl_acdc_expr(n), acdczx_to_expl_pattern(zx))
+        }
+        ACDCZX::NStack1 { n, zx } => {
+            format!("(nstack1 {} {})", to_expl_acdc_expr(n), acdczx_to_expl_pattern(zx))
+        }
+    }
+}
+
 pub fn collect_dim_symbols(zx: &ACDCZX) -> HashSet<String> {
     match zx {
         ACDCZX::Cast { n, m, zx } => {
@@ -672,6 +768,8 @@ pub fn collect_dim_symbols(zx: &ACDCZX) -> HashSet<String> {
         }
     }
 }
+
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MatchedZXParam {
     pub matched: ACDCZX,
@@ -703,21 +801,31 @@ where
         &self.rewrites
     }
 
-    pub fn get_params_and_side(&self, node: &ACDCZX, lhs: bool) -> (Vec<MatchedZXParam>, bool) {
+    pub fn get_params_and_side(
+        &self,
+        node: &ACDCZX,
+        lhs: bool,
+    ) -> Result<(Vec<MatchedZXParam>, bool), String> {
         eprintln!("PARAMS: {:?}", self.params);
         if self.params.len() == 0 {
             eprintln!("No params, returning empty vec");
-            return (vec![], lhs);
+            return Ok((vec![], lhs));
         }
         if lhs {
             eprintln!("Getting params for lhs : {:?}", self.lhs);
             let lp = get_params_from_lemma(node, self.lhs.deref(), &self.params);
             eprintln!("LHS params: {:?}", lp);
-            return (lp.unwrap_or_else(|x| panic!("{}", x)), false);
+            return match lp {
+                Err(e) => Err(e),
+                Ok(v) => Ok((v, false)),
+            };
         }
         eprintln!("Getting params for rhs : {:?}", self.rhs);
         let rp = get_params_from_lemma(node, self.rhs.deref(), &self.params);
-        (rp.unwrap_or_else(|x| panic!("{}", x)), true)
+        match rp {
+            Err(e) => Err(e),
+            Ok(v) => Ok((v, true)),
+        }
     }
 
     fn get_param_map(params: &Vec<MatchedZXParam>) -> HashMap<String, ACDCZX> {
@@ -746,7 +854,9 @@ where
     }
 
     pub fn build_subtree_from_application(&self, node: &ACDCZX, rhs: bool) -> ACDCZX {
-        let (params, rhs) = self.get_params_and_side(node, rhs);
+        let (params, rhs) = self
+            .get_params_and_side(node, rhs)
+            .unwrap_or_else(|e| panic!("Failed to get params: {}", e));
         let base = if rhs {
             self.lhs.clone()
         } else {
@@ -1044,6 +1154,7 @@ where
     });
     eprintln!("------");
     eprintln!("{}", name);
+    eprintln!("With params: {:?}", params);
     eprintln!("{:?} - {:?}", lhs, replaced_lhs);
     eprintln!("{:?} - {:?}", rhs, replaced_rhs);
     let mut all_symbols_in_exprs = collect_dim_symbols(replaced_lhs);
@@ -1069,6 +1180,7 @@ where
     //     conditions
     // );
     for cond in conditions {
+        eprintln!("Condition: {:?}", cond);
         match cond {
             Constr::Eq(c) => eq_conditions.push(c),
             Constr::False(_) => {
@@ -1200,7 +1312,15 @@ where
         if prf.name == "nwire_removal_l" {
             eprintln!("Found nwire_removal_l, returning params");
         }
-        Some(lemma.get_params_and_side(candidate, prf.direction == Forward))
+        Some(
+            lemma
+                .get_params_and_side(candidate, prf.direction == Forward)
+                .unwrap_or_else(|_| {
+                    lemma
+                        .get_params_and_side(candidate, prf.direction != Forward)
+                        .unwrap_or_else(|e| panic!("Failed to match side args: {}", e))
+                }),
+        )
     }
 }
 
