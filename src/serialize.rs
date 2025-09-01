@@ -337,9 +337,10 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
                                     .collect::<Vec<_>>()
                                     .join(",")
                             );
+                            let rhs = proof.unwrap().direction != Direction::Forward;
                             let subtree = lemma.build_subtree_from_application(
                                 &acdczx,
-                                proof.unwrap().direction == Direction::Backward,
+                                rhs ,
                             );
                             eprintln!("Rewrite at idx for {}", rule_name);
                             let (idx, has_idx) = rewrite_at_idx(&prev, &new, &subtree);

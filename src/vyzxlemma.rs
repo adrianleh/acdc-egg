@@ -67,7 +67,8 @@ struct ACDCDimConstraint {
     unsat: bool,
 }
 
-pub fn to_expl_acdc_expr(dim: &ACDCDim) -> String { //TODO: Merge with to_acdc_expr (no time before deadline)
+pub fn to_expl_acdc_expr(dim: &ACDCDim) -> String {
+    //TODO: Merge with to_acdc_expr (no time before deadline)
     match dim {
         ACDCDim::Lit { lit } => lit.to_string(),
         ACDCDim::Symbol { symbol: s } => {
@@ -92,7 +93,6 @@ pub fn to_expl_acdc_expr(dim: &ACDCDim) -> String { //TODO: Merge with to_acdc_e
         }
     }
 }
-
 
 pub fn to_acdc_expr(dim: &ACDCDim) -> String {
     match dim {
@@ -539,7 +539,7 @@ fn dim_constr_to_cond_eq(l_name: &str, r_name: &str, constr: &ACDCDimConstraint)
     eprintln!("{}", e1.as_str());
     eprintln!(
         "{:?}",
-        ConditionEqualWrap::<ACDC>::new(e0.as_str().parse().unwrap(), e1.as_str().parse().unwrap(), )
+        ConditionEqualWrap::<ACDC>::new(e0.as_str().parse().unwrap(), e1.as_str().parse().unwrap(),)
     );
     Constr::Eq(ConditionEqualWrap::new(
         e0.as_str().parse().unwrap(),
@@ -638,7 +638,6 @@ pub fn acdczx_to_pattern(zx: &ACDCZX) -> String {
     }
 }
 
-
 pub fn zx_or_dim_expl_pattern(zd: &ZXOrDim) -> String {
     match zd {
         ZXOrDim::ZX(zx) => acdczx_to_expl_pattern(zx),
@@ -672,7 +671,11 @@ pub fn acdczx_to_expl_pattern(zx: &ACDCZX) -> String {
         ),
         ACDCZX::NWire { n } => format!("(nwire {})", to_expl_acdc_expr(n)),
         ACDCZX::Stack { a, b } => {
-            format!("(stack {} {})", acdczx_to_expl_pattern(a), acdczx_to_expl_pattern(b))
+            format!(
+                "(stack {} {})",
+                acdczx_to_expl_pattern(a),
+                acdczx_to_expl_pattern(b)
+            )
         }
         ACDCZX::X { n, m, alpha: a } => format!(
             "(X {} {} {})",
@@ -695,10 +698,18 @@ pub fn acdczx_to_expl_pattern(zx: &ACDCZX) -> String {
                 .join(" ")
         ),
         ACDCZX::NStack { n, zx } => {
-            format!("(nstack {} {})", to_expl_acdc_expr(n), acdczx_to_expl_pattern(zx))
+            format!(
+                "(nstack {} {})",
+                to_expl_acdc_expr(n),
+                acdczx_to_expl_pattern(zx)
+            )
         }
         ACDCZX::NStack1 { n, zx } => {
-            format!("(nstack1 {} {})", to_expl_acdc_expr(n), acdczx_to_expl_pattern(zx))
+            format!(
+                "(nstack1 {} {})",
+                to_expl_acdc_expr(n),
+                acdczx_to_expl_pattern(zx)
+            )
         }
     }
 }
@@ -768,7 +779,6 @@ pub fn collect_dim_symbols(zx: &ACDCZX) -> HashSet<String> {
         }
     }
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MatchedZXParam {
@@ -854,9 +864,10 @@ where
     }
 
     pub fn build_subtree_from_application(&self, node: &ACDCZX, rhs: bool) -> ACDCZX {
-        let (params, rhs) = self
-            .get_params_and_side(node, rhs)
-            .unwrap_or_else(|e| panic!("Failed to get params: {}", e));
+        let (params, rhs) = self.get_params_and_side(node, rhs).unwrap_or_else(|_| {
+            self.get_params_and_side(node, !rhs)
+                .unwrap_or_else(|e| panic!("Failed to get params: {}", e))
+        });
         let base = if rhs {
             self.lhs.clone()
         } else {
