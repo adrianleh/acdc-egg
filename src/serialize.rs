@@ -47,6 +47,10 @@ impl Proof {
             direction: direction.invert_if(name.ends_with(REVERSE_LEMMA_SUFFIX)),
         }
     }
+    
+    pub fn flip_direction(&mut self) {
+        self.direction = self.direction.invert();
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -276,6 +280,7 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> SerFlatTermWrap<'a, A> {
     }
 }
 
+
 // impl<L: Language + 'static + ToSer<T, L, A>, A: Analysis<L>, T: Ser> Ser
 //     for SerFlatTermWrap<L, A> - Weird rust typing reasons make this not work
 impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
@@ -285,11 +290,10 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
     {
         let mut state = serializer.serialize_struct("SerFlatTermWrap", 7)?;
         let proof = self.get_proof();
-        state.serialize_field("proof", &proof)?;
         let mut arguments = vec![];
         let mut at = None;
         let mut total_arguments = 0u32;
-        let mut inferred_arguments : Vec<u32>= vec![];
+        let mut inferred_arguments: Vec<u32> = vec![];
         if proof.is_some() {
             let rule_name = &proof.clone().unwrap().name;
             let lemma = self.container.get(&rule_name);
@@ -301,6 +305,7 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
             let acdczx = acdc_to_acdc_zx_or_dim(acdc, self.egraph);
             let prev = recexpr_to_ACDC(&self.prev_top);
             let new = recexpr_to_ACDC(&self.curr_top);
+            let mut concrete_proof =  proof.unwrap();
             if (&prev).is_zx() && (&new).is_zx() {
                 let prev = prev.get_zx().unwrap();
                 let new = new.get_zx().unwrap();
@@ -308,7 +313,7 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
                     let acdczx = &acdczx.get_zx().unwrap();
                     eprintln!(
                         "Getting proof args for {:?} on {:?}",
-                        proof.clone().unwrap(),
+                        concrete_proof.clone(),
                         acdczx
                     );
                     let largest_diff_opt = largest_diff(&prev, &new);
@@ -321,11 +326,28 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
                     } else {
                         let largest_diff = largest_diff_opt.unwrap();
                         eprintln!("Largest diff: {:?} vs {:?}", largest_diff.0, largest_diff.1);
-                        let (raw_args, _) = self
+                        let mut flip =false;
+                        let (raw_args, actual_rhs) = self
                             .container
-                            .get_match_side_args(&proof.clone().unwrap(), &largest_diff.1)
+                            .get_match_side_args(&concrete_proof.clone(), &largest_diff.1)
+                            .unwrap_or_else(|_| {
+                                flip= true;
+                                self.container
+                                    .get_match_side_args(&concrete_proof.clone(), &largest_diff.0) // Yet another band-aid (should be by figuring out direction properly)
+                                    .unwrap_or_else(|e| {
+                                        panic!(
+                                            "Failed to match side args for lemma {}: {}",
+                                            rule_name, e
+                                        )
+                                    })
+                            })
                             .or_else(|| Some((vec![], false)))
                             .unwrap();
+                        let flip2 = actual_rhs ^ (concrete_proof.direction == Direction::Backward);
+                        flip = flip ^ flip2;
+                        if flip {
+                           concrete_proof.flip_direction();
+                        }
                         let lemma = self.container.get(&rule_name);
                         if let Some(lemma) = lemma {
                             arguments = lemma.to_ordered_params(&raw_args);
@@ -337,11 +359,8 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
                                     .collect::<Vec<_>>()
                                     .join(",")
                             );
-                            let rhs = proof.unwrap().direction != Direction::Forward;
-                            let subtree = lemma.build_subtree_from_application(
-                                &acdczx,
-                                rhs ,
-                            );
+                            let rhs = concrete_proof.direction != Direction::Forward;
+                            let subtree = lemma.build_subtree_from_application(&acdczx, rhs);
                             eprintln!("Rewrite at idx for {}", rule_name);
                             let (idx, has_idx) = rewrite_at_idx(&prev, &new, &subtree);
                             if has_idx {
@@ -351,6 +370,9 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
                     }
                 }
             }
+            state.serialize_field("proof", &Some(concrete_proof))?;
+        } else {
+            state.serialize_field("proof", &None::<Proof>)?;
         }
         state.serialize_field("arguments", &arguments)?;
         state.serialize_field("node", &recexpr_to_ACDC(&self.curr_top).get_zx())?;

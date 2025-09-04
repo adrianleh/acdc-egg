@@ -13,6 +13,7 @@ dependencies = [
  "jsonrpc-http-server",
  "jsonrpc-v2",
  "log",
+ "rand",
  "serde",
  "serde_derive",
  "serde_json",

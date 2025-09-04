@@ -15,3 +15,4 @@ jsonrpc-v2 = { version = "^0.13.0"}
 bytes = "1.10.1"
 jsonrpc-http-server = "18.0.0"
 actix-web = "4"
+rand = "0.9.2"

@@ -17,7 +17,9 @@ mod vyzxrules;
 
 use crate::benchmark::benchmark;
 use crate::serialize::{ACDCResult, Direction, SerFlatTermWrap};
-use crate::vyzxlemma::{LemmaContainer, acdczx_to_pattern, to_acdc_expr, to_expl_acdc_expr, acdczx_to_expl_pattern};
+use crate::vyzxlemma::{
+    LemmaContainer, acdczx_to_expl_pattern, acdczx_to_pattern, to_acdc_expr, to_expl_acdc_expr,
+};
 use crate::vyzxrules::{vyzx_rules, vyzx_rws};
 use actix_web::web::to;
 use alloc::string::String;
@@ -36,7 +38,10 @@ const TEST_STRING: &str = "@@@@@@@test@@@@@@@";
 #[tokio::main]
 async fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.get(1) == Some(&"--legacy".to_string()) {
+    if args.get(1) == Some(&"--legacy".to_string())
+        || args.get(1) == Some(&"--benchmark".to_string())
+        || args.get(1) == Some(&"--version".to_string())
+    {
         legacy_main();
         return;
     } else if args.get(1) == Some(&"--test".to_string()) {
@@ -62,18 +67,21 @@ fn legacy_main() {
         return;
     }
     if args.len() > 1 && args[1] == "--benchmark" {
-        if args.len() != 4 {
-            panic!("Usage: --benchmark <benchmark_name> <n>");
+        if args.len() != 5 {
+            panic!("Usage: --benchmark <benchmark_name> <n> <iters>");
         }
+        eprintln!("{}", &args.join(";"));
         let benchmark_name = &args[2];
         let raw_n = &args[3];
         let n = raw_n.parse::<u32>().unwrap_or_else(|_| {
             panic!("Invalid benchmarrk size: {}", raw_n);
         });
+        let raw_iters = &args[4];
+        let iters = raw_iters.parse::<u32>().unwrap_or_else(|_| {
+            panic!("Invalid benchmark iters: {}", raw_iters);
+        });
         println!("n,saturation time (ms)");
-        for i in 0..n {
-            benchmark(benchmark_name, i);
-        }
+        benchmark(benchmark_name, 1, n, iters);
         // Run a test case
         return;
     }
@@ -181,10 +189,13 @@ fn run_with_problem(
         match hyp {
             Hyp::DepHyp { name, n, m } => {
                 let dep1: Pattern<ACDC> = format!("(dep1 {})", name).parse().unwrap();
-                let dep2: Pattern<ACDC> =  format!("(dep2 {})", name).parse().unwrap();
+                let dep2: Pattern<ACDC> = format!("(dep2 {})", name).parse().unwrap();
                 let n_pattern: Pattern<ACDC> = to_expl_acdc_expr(n).as_str().parse().unwrap();
                 let m_pattern: Pattern<ACDC> = to_expl_acdc_expr(m).as_str().parse().unwrap();
-                eprintln!("Adding dep hyp rewrites for {}: {} -> {}, {} -> {}", name, dep1, n_pattern,dep2, m_pattern);
+                eprintln!(
+                    "Adding dep hyp rewrites for {}: {} -> {}, {} -> {}",
+                    name, dep1, n_pattern, dep2, m_pattern
+                );
                 dim_hyp_rws.push(Rewrite::new(format!("dep-{}-n", name), dep1, n_pattern)?);
                 dim_hyp_rws.push(Rewrite::new(format!("dep-{}-m", name), dep2, m_pattern)?);
             }

@@ -360,9 +360,9 @@ fn gen_common_var_constraint(
             ],
             unsat: !(&l_dim == &r_dim
                 && &l_dim
-                    == &ACDCDim::Symbol {
-                        symbol: common_var.clone(),
-                    }), // Right now only allow when both are the same variable not in exprs
+                == &ACDCDim::Symbol {
+                symbol: common_var.clone(),
+            }), // Right now only allow when both are the same variable not in exprs
         });
     }
     ret
@@ -451,8 +451,8 @@ fn get_param_to_symbol_constraints(
                     },
                     &param,
                 )
-                .iter()
-                .map(|x| dim_constr_to_cond_eq(s.clone().unwrap().as_str(), &param.name, x)),
+                    .iter()
+                    .map(|x| dim_constr_to_cond_eq(s.clone().unwrap().as_str(), &param.name, x)),
             );
         }
         let s = is_symbol_from(&param.m, discovered_symbols);
@@ -471,8 +471,8 @@ fn get_param_to_symbol_constraints(
                     },
                     &param,
                 )
-                .iter()
-                .map(|x| dim_constr_to_cond_eq(s.clone().unwrap().as_str(), &param.name, x)),
+                    .iter()
+                    .map(|x| dim_constr_to_cond_eq(s.clone().unwrap().as_str(), &param.name, x)),
             );
         }
     }
@@ -539,7 +539,7 @@ fn dim_constr_to_cond_eq(l_name: &str, r_name: &str, constr: &ACDCDimConstraint)
     eprintln!("{}", e1.as_str());
     eprintln!(
         "{:?}",
-        ConditionEqualWrap::<ACDC>::new(e0.as_str().parse().unwrap(), e1.as_str().parse().unwrap(),)
+        ConditionEqualWrap::<ACDC>::new(e0.as_str().parse().unwrap(), e1.as_str().parse().unwrap(), )
     );
     Constr::Eq(ConditionEqualWrap::new(
         e0.as_str().parse().unwrap(),
@@ -1243,7 +1243,7 @@ where
             r_pattern.clone(),
             l_cond,
         )
-        .unwrap();
+            .unwrap();
         rws = vec![rw, rw_back];
     }
     let min_args = params.len() as u32;
@@ -1310,10 +1310,10 @@ where
         &self,
         prf: &Proof,
         candidate: &ACDCZX,
-    ) -> Option<(Vec<MatchedZXParam>, bool)> {
+    ) -> Result<Option<(Vec<MatchedZXParam>, bool)>, String> {
         let lemma = self.get(&prf.name);
         if (&lemma).is_none() {
-            return None;
+            return Ok(None);
         }
         let lemma = lemma.unwrap();
         eprintln!(
@@ -1323,15 +1323,13 @@ where
         if prf.name == "nwire_removal_l" {
             eprintln!("Found nwire_removal_l, returning params");
         }
-        Some(
-            lemma
-                .get_params_and_side(candidate, prf.direction == Forward)
-                .unwrap_or_else(|_| {
-                    lemma
-                        .get_params_and_side(candidate, prf.direction != Forward)
-                        .unwrap_or_else(|e| panic!("Failed to match side args: {}", e))
-                }),
-        )
+        let fwd = lemma.get_params_and_side(candidate, prf.direction == Forward).map(|x| Some(x));
+        if fwd.is_ok() {
+            return fwd;
+        }
+        lemma
+            .get_params_and_side(candidate, prf.direction != Forward)
+            .map(|x| Some(x))
     }
 }
 
