@@ -246,34 +246,8 @@ fn run_with_problem(
         );
     }
 
-    let dep_1 = runner.egraph.add_expr(&"(dep1 (cast (+ (+ 1 (+ 1 0)) n) (+ (+ 1 (+ 1 0)) n) (compose (stack (val 1 1 Wire) (nwire (+ 1 n))) (stack (val 1 1 Wire) (nwire (+ 1 n))))))".parse().unwrap());
-    let dep_2 = runner.egraph.add_expr(&"(dep1 (compose (stack (val 1 1 Wire) (nwire (+ 1 n))) (stack (val 1 1 Wire) (nwire (+ 1 n))))) ".parse().unwrap());
-    let dep_3 = runner.egraph.add_expr(&"(dep1 (stack (val 1 1 Wire) (nwire (+ 1 n))))".parse().unwrap());
-    let dep_4 = runner.egraph.add_expr(&"(+ (dep1 (val 1 1 Wire)) (dep1 (nwire (+ 1 n)))))".parse().unwrap());
-
-    let dep_5 = runner.egraph.add_expr(&"(+ 1 (+ 1 n))".parse().unwrap());
-    let dep_6 = runner.egraph.add_expr(&"(+ 2 n)".parse().unwrap());
-    let dep_7 = runner.egraph.add_expr(&"(+ (+ 1 (+ 1 0)) n)".parse().unwrap());
-    let dep_8 = runner.egraph.add_expr(&"(dep1 (val 1 1 Wire))".parse().unwrap());
-    let dep_9 = runner.egraph.add_expr(&"(dep1  (nwire (+ 1 n)))".parse().unwrap());
-    let dep_10 = runner.egraph.add_expr(&"(+ 1 (+ (+ 1 0) n))".parse().unwrap());
-    let dep_11 = runner.egraph.add_expr(&"(+ 1 (+ 1 n))".parse().unwrap());
-    let dep_12 = runner.egraph.add_expr(&"(+ 2 n)".parse().unwrap());
-    eprintln!("dep1: {:?} {}", runner.egraph.find(dep_1), runner.egraph.id_to_node(runner.egraph.find(dep_1)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
-    eprintln!("dep2: {:?} {}", runner.egraph.find(dep_2), runner.egraph.id_to_node(runner.egraph.find(dep_2)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
-    eprintln!("dep3: {:?} {}", runner.egraph.find(dep_3), runner.egraph.id_to_node(runner.egraph.find(dep_3)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
-    eprintln!("dep4: {:?} {}", runner.egraph.find(dep_4), runner.egraph.id_to_node(runner.egraph.find(dep_4)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
-    eprintln!("dep5: {:?} {}", runner.egraph.find(dep_5), runner.egraph.id_to_node(runner.egraph.find(dep_5)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
-    eprintln!("dep6: {:?} {}", runner.egraph.find(dep_6), runner.egraph.id_to_node(runner.egraph.find(dep_6)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
-    eprintln!("dep7: {:?} {}", runner.egraph.find(dep_7), runner.egraph.id_to_node(runner.egraph.find(dep_7)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
-    eprintln!("dep8: {:?} {}", runner.egraph.find(dep_8), runner.egraph.id_to_node(runner.egraph.find(dep_8)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
-    eprintln!("dep9: {:?} {}", runner.egraph.find(dep_9), runner.egraph.id_to_node(runner.egraph.find(dep_9)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
-    eprintln!("dep10: {:?} {}", runner.egraph.find(dep_10), runner.egraph.id_to_node(runner.egraph.find(dep_10)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
-    eprintln!("dep11: {:?} {}", runner.egraph.find(dep_11), runner.egraph.id_to_node(runner.egraph.find(dep_11)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
-    eprintln!("dep12: {:?} {}", runner.egraph.find(dep_12), runner.egraph.id_to_node(runner.egraph.find(dep_12)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
-
-
     if runner.egraph.find(expr_id) != runner.egraph.find(res) {
+        eprintln!("Failed to prove equality between {} and {}", expr_id, res);
         return Err("Failed to prove equality".to_string());
     }
 
