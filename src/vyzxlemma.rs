@@ -583,6 +583,9 @@ pub fn zx_or_dim_pattern(zd: &ZXOrDim) -> String {
 pub fn acdczx_to_pattern(zx: &ACDCZX) -> String {
     match zx {
         ACDCZX::Val { val: s, n, m } => {
+            if s.to_lowercase() == "swap" {
+                eprintln!("Swap found" );
+            }
             if n.is_none() && m.is_none() {
                 format!("?{}", s)
             } else {
@@ -647,6 +650,9 @@ pub fn zx_or_dim_expl_pattern(zd: &ZXOrDim) -> String {
 pub fn acdczx_to_expl_pattern(zx: &ACDCZX) -> String {
     match zx {
         ACDCZX::Val { val: s, n, m } => {
+            if s.to_lowercase() == "swap" {
+                eprintln!("Swap found");
+            }
             if n.is_none() && m.is_none() {
                 format!("{}", s)
             } else {
@@ -946,7 +952,7 @@ macro_rules! found_var {
                 name: $val.clone(),
             }])
         } else {
-            panic!("{:?} not found in {:?}", $val, $param_names);
+            Err(format!("{:?} not found in {:?}", $val, $param_names).to_string())
         }
     };
 }
@@ -1000,6 +1006,7 @@ fn get_params_from_lemma(
             }
         }
         (ACDCZX::Val { val, n, m }, r) => {
+            eprintln!("Looking for var {} in {:?}", val, r);
             found_var!(param_names, val, r)
         }
         (l, ACDCZX::Val { val, n, m }) => {

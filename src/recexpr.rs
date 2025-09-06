@@ -58,6 +58,7 @@ fn recexpr_to_ACDC_at(rec_expr: &RecExpr<ACDC>, i: Id) -> ZXOrDimOrEither {
             ZXOrDimOrEither::Dim(ACDCDim::Dep1 { zx: Box::new(expr) })
         }
         ACDC::Dep2(id) => {
+            eprintln!("Dep2 on id {:?} -> {:?}", id, rec_expr.index(*id));
             let expr = recexpr_to_ACDC_at(rec_expr, *id).get_zx().unwrap();
             ZXOrDimOrEither::Dim(ACDCDim::Dep2 { zx: Box::new(expr) })
         }

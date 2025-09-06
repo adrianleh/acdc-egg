@@ -80,7 +80,6 @@ fn legacy_main() {
         let iters = raw_iters.parse::<u32>().unwrap_or_else(|_| {
             panic!("Invalid benchmark iters: {}", raw_iters);
         });
-        println!("n,saturation time (ms)");
         benchmark(benchmark_name, 1, n, iters);
         // Run a test case
         return;
@@ -227,19 +226,59 @@ fn run_with_problem(
             .map(|id| format!("{:?}", id))
             .collect::<Vec<_>>()
             .join(", ");
+        // eprintln!(
+        //     "{}: {:?} -> {:?} (#{}) (children: [{}])",
+        //     i,
+        //     node,
+        //     runner.egraph.id_to_node(target_id),
+        //     target_id,
+        //     children_str
+        // );
+        let re_node = node.build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string();
+        let re_target = runner
+            .egraph
+            .id_to_node(target_id)
+            .build_recexpr(|id| runner.egraph.id_to_node(id).clone())
+            .to_string();
         eprintln!(
-            "{}: {:?} -> {:?} (#{}) (children: [{}])",
-            i,
-            node,
-            runner.egraph.id_to_node(target_id),
-            target_id,
-            children_str
+            "{}: {} -> {}",
+            i, re_node, re_target
         );
     }
+
+    let dep_1 = runner.egraph.add_expr(&"(dep1 (cast (+ (+ 1 (+ 1 0)) n) (+ (+ 1 (+ 1 0)) n) (compose (stack (val 1 1 Wire) (nwire (+ 1 n))) (stack (val 1 1 Wire) (nwire (+ 1 n))))))".parse().unwrap());
+    let dep_2 = runner.egraph.add_expr(&"(dep1 (compose (stack (val 1 1 Wire) (nwire (+ 1 n))) (stack (val 1 1 Wire) (nwire (+ 1 n))))) ".parse().unwrap());
+    let dep_3 = runner.egraph.add_expr(&"(dep1 (stack (val 1 1 Wire) (nwire (+ 1 n))))".parse().unwrap());
+    let dep_4 = runner.egraph.add_expr(&"(+ (dep1 (val 1 1 Wire)) (dep1 (nwire (+ 1 n)))))".parse().unwrap());
+
+    let dep_5 = runner.egraph.add_expr(&"(+ 1 (+ 1 n))".parse().unwrap());
+    let dep_6 = runner.egraph.add_expr(&"(+ 2 n)".parse().unwrap());
+    let dep_7 = runner.egraph.add_expr(&"(+ (+ 1 (+ 1 0)) n)".parse().unwrap());
+    let dep_8 = runner.egraph.add_expr(&"(dep1 (val 1 1 Wire))".parse().unwrap());
+    let dep_9 = runner.egraph.add_expr(&"(dep1  (nwire (+ 1 n)))".parse().unwrap());
+    let dep_10 = runner.egraph.add_expr(&"(+ 1 (+ (+ 1 0) n))".parse().unwrap());
+    let dep_11 = runner.egraph.add_expr(&"(+ 1 (+ 1 n))".parse().unwrap());
+    let dep_12 = runner.egraph.add_expr(&"(+ 2 n)".parse().unwrap());
+    eprintln!("dep1: {:?} {}", runner.egraph.find(dep_1), runner.egraph.id_to_node(runner.egraph.find(dep_1)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
+    eprintln!("dep2: {:?} {}", runner.egraph.find(dep_2), runner.egraph.id_to_node(runner.egraph.find(dep_2)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
+    eprintln!("dep3: {:?} {}", runner.egraph.find(dep_3), runner.egraph.id_to_node(runner.egraph.find(dep_3)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
+    eprintln!("dep4: {:?} {}", runner.egraph.find(dep_4), runner.egraph.id_to_node(runner.egraph.find(dep_4)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
+    eprintln!("dep5: {:?} {}", runner.egraph.find(dep_5), runner.egraph.id_to_node(runner.egraph.find(dep_5)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
+    eprintln!("dep6: {:?} {}", runner.egraph.find(dep_6), runner.egraph.id_to_node(runner.egraph.find(dep_6)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
+    eprintln!("dep7: {:?} {}", runner.egraph.find(dep_7), runner.egraph.id_to_node(runner.egraph.find(dep_7)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
+    eprintln!("dep8: {:?} {}", runner.egraph.find(dep_8), runner.egraph.id_to_node(runner.egraph.find(dep_8)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
+    eprintln!("dep9: {:?} {}", runner.egraph.find(dep_9), runner.egraph.id_to_node(runner.egraph.find(dep_9)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
+    eprintln!("dep10: {:?} {}", runner.egraph.find(dep_10), runner.egraph.id_to_node(runner.egraph.find(dep_10)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
+    eprintln!("dep11: {:?} {}", runner.egraph.find(dep_11), runner.egraph.id_to_node(runner.egraph.find(dep_11)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
+    eprintln!("dep12: {:?} {}", runner.egraph.find(dep_12), runner.egraph.id_to_node(runner.egraph.find(dep_12)).build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string());
+
 
     if runner.egraph.find(expr_id) != runner.egraph.find(res) {
         return Err("Failed to prove equality".to_string());
     }
+
+
+
 
     eprintln!("Explaining...");
     let start_expl_time = std::time::Instant::now();
@@ -293,11 +332,45 @@ where
         rewrite!("simpl-mul-0"; "(* 0 ?a)" => "0"),
         rewrite!("simpl-mul-1"; "(* 1 ?a)" => "?a"),
         rewrite!("simpl-neg-0"; "(- ?a 0)" => "?a"),
+        rewrite!("simpl-s-fold"; "(+ 1 (+ ?a ?x))" => "(+ (+ 1 ?a) ?x)"),
+        rewrite!("simpl-c-add"; "(+ ?a (+ ?b ?x))" => {FoldInBrack{}}),
         // rewrite!("IZR"; "(fn IZR ?a)" => "?a"),
         // rewrite!("Rplus"; "(fn Rplus ?a ?b)" => "(+ ?a ?b)"),
     ]
 }
 
+struct FoldInBrack {}
+
+impl<T> Applier<ACDC, T> for FoldInBrack
+where
+    T: Analysis<ACDC>,
+{
+    fn apply_one(
+        &self,
+        egraph: &mut EGraph<ACDC, T>,
+        matched_id: Id,
+        _: &Subst,
+        _: Option<&PatternAst<ACDC>>,
+        _: Symbol,
+    ) -> Vec<Id> {
+        let idx : usize = matched_id.into();
+        let recexpr = egraph
+            .nodes()[idx]
+            .build_recexpr(|id| egraph.id_to_node(id).clone());
+        if let Some((added, d)) = get_add_fold(egraph, matched_id) {
+            let added_id = egraph.add(ACDC::Lit(added));
+            let new_add = egraph.add(ACDC::Add([added_id, d]));
+            let new_add_idx :usize = new_add.into();
+            let new_add_recexpr = egraph
+                .nodes()[new_add_idx]
+                .build_recexpr(|id| egraph.id_to_node(id).clone());
+            eprintln!("Folded {} to {}", recexpr.to_string(), new_add_recexpr.to_string());
+            egraph.union(matched_id, new_add);
+            return vec![matched_id, new_add];
+        }
+        vec![]
+    }
+}
 fn dep_rules<T>() -> Vec<Rewrite<ACDC, T>>
 where
     T: Analysis<ACDC>,
@@ -316,8 +389,8 @@ where
         rewrite!("dep-m-stack"; "(dep2 (stack ?a ?b))" => "(+ (dep2 ?a) (dep2 ?b))"),
         rewrite!("dep-n-compose"; "(dep1 (compose ?a ?b))" => "(dep1 ?a)"),
         rewrite!("dep-m-compose"; "(dep2 (compose ?a ?b))" => "(dep2 ?b)"),
-        rewrite!("dep-n-cast"; "(dep1 (cast ?a ?b ?c))" => "(dep1 ?a)"),
-        rewrite!("dep-m-cast"; "(dep2 (cast ?a ?b ?c))" => "(dep2 ?b)"),
+        rewrite!("dep-n-cast"; "(dep1 (cast ?a ?b ?c))" => "?a"),
+        rewrite!("dep-m-cast"; "(dep2 (cast ?a ?b ?c))" => "?b"),
         rewrite!("dep-n-nstack"; "(dep1 (nstack ?a ?b))" => "(* ?a (dep1 ?b))"),
         rewrite!("dep-m-nstack"; "(dep2 (nstack ?a ?b))" => "(* ?a (dep2 ?b))"),
         rewrite!("dep-n-nstack1"; "(dep1 (nstack1 ?a ?b))" => "?a"),
@@ -427,6 +500,7 @@ where
     }
 }
 
+#[inline]
 fn is_zx_term<T>(acdc: &ACDC, egraph: &EGraph<ACDC, T>) -> bool
 where
     T: Analysis<ACDC>,
@@ -450,6 +524,29 @@ where
 
 #[derive(Default, Debug, Clone)]
 struct ConstantFolding;
+
+fn get_add_fold<T>(egraph: &mut EGraph<ACDC, T>, id: Id) -> Option<(i32, Id)>
+where
+    T: Analysis<ACDC>,
+{
+    match &egraph.id_to_node(id) {
+        ACDC::Add([a, b]) => match egraph.id_to_node(b.clone()) {
+            ACDC::Add([c, d]) => {
+                match (&egraph.id_to_node(a.clone()), &egraph.id_to_node(c.clone())) {
+                    (ACDC::Lit(x), ACDC::Lit(y)) => {
+                        let dn = egraph.id_to_node(d.clone());
+                        eprintln!("Folding: {} + ({} + {}) -> {} + {}", x, y, dn, x + y, dn);
+                        Some((x + y, d.clone()))
+                    }
+                    _ => None,
+                }
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 impl Analysis<ACDC> for ConstantFolding {
     type Data = Option<i32>;
 
@@ -465,11 +562,17 @@ impl Analysis<ACDC> for ConstantFolding {
     }
 
     fn merge(&mut self, to: &mut Self::Data, from: Self::Data) -> DidMerge {
-        merge_min(to, from)
+        merge_option(to, from, merge_min)
     }
 
     fn modify(egraph: &mut EGraph<ACDC, Self>, id: Id) {
+        if let Some((v, d)) = get_add_fold(egraph, id) {
+            let added = egraph.add(ACDC::Lit(v));
+            let new_add = egraph.add(ACDC::Add([added, d.clone()]));
+            egraph.union_trusted(id, new_add, "simpl");
+        }
         if let Some(i) = egraph[id].data {
+            eprintln!("Const folding {:?} to Lit({})", egraph.id_to_node(id).build_recexpr(|x| egraph.id_to_node(x).clone()).to_string(), i);
             let added = egraph.add(ACDC::Lit(i));
             egraph.union_trusted(id, added, "simpl");
         }
