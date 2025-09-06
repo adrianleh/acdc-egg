@@ -360,7 +360,7 @@ impl<'a, A: Analysis<ACDC> + Clone + Debug> Ser for SerFlatTermWrap<'a, A> {
                                     .join(",")
                             );
                             let rhs = concrete_proof.direction != Direction::Forward;
-                            let subtree = lemma.build_subtree_from_application(&acdczx, rhs);
+                            let subtree = lemma.build_subtree_from_application(&acdczx, rhs, &raw_args);
                             eprintln!("Rewrite at idx for {}", rule_name);
                             let (idx, has_idx) = rewrite_at_idx(&prev, &new, &subtree);
                             if has_idx {

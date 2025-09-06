@@ -360,9 +360,9 @@ fn gen_common_var_constraint(
             ],
             unsat: !(&l_dim == &r_dim
                 && &l_dim
-                == &ACDCDim::Symbol {
-                symbol: common_var.clone(),
-            }), // Right now only allow when both are the same variable not in exprs
+                    == &ACDCDim::Symbol {
+                        symbol: common_var.clone(),
+                    }), // Right now only allow when both are the same variable not in exprs
         });
     }
     ret
@@ -451,8 +451,8 @@ fn get_param_to_symbol_constraints(
                     },
                     &param,
                 )
-                    .iter()
-                    .map(|x| dim_constr_to_cond_eq(s.clone().unwrap().as_str(), &param.name, x)),
+                .iter()
+                .map(|x| dim_constr_to_cond_eq(s.clone().unwrap().as_str(), &param.name, x)),
             );
         }
         let s = is_symbol_from(&param.m, discovered_symbols);
@@ -471,8 +471,8 @@ fn get_param_to_symbol_constraints(
                     },
                     &param,
                 )
-                    .iter()
-                    .map(|x| dim_constr_to_cond_eq(s.clone().unwrap().as_str(), &param.name, x)),
+                .iter()
+                .map(|x| dim_constr_to_cond_eq(s.clone().unwrap().as_str(), &param.name, x)),
             );
         }
     }
@@ -539,7 +539,7 @@ fn dim_constr_to_cond_eq(l_name: &str, r_name: &str, constr: &ACDCDimConstraint)
     eprintln!("{}", e1.as_str());
     eprintln!(
         "{:?}",
-        ConditionEqualWrap::<ACDC>::new(e0.as_str().parse().unwrap(), e1.as_str().parse().unwrap(), )
+        ConditionEqualWrap::<ACDC>::new(e0.as_str().parse().unwrap(), e1.as_str().parse().unwrap(),)
     );
     Constr::Eq(ConditionEqualWrap::new(
         e0.as_str().parse().unwrap(),
@@ -584,7 +584,7 @@ pub fn acdczx_to_pattern(zx: &ACDCZX) -> String {
     match zx {
         ACDCZX::Val { val: s, n, m } => {
             if s.to_lowercase() == "swap" {
-                eprintln!("Swap found" );
+                eprintln!("Swap found");
             }
             if n.is_none() && m.is_none() {
                 format!("?{}", s)
@@ -869,11 +869,7 @@ where
         ret
     }
 
-    pub fn build_subtree_from_application(&self, node: &ACDCZX, rhs: bool) -> ACDCZX {
-        let (params, rhs) = self.get_params_and_side(node, rhs).unwrap_or_else(|_| {
-            self.get_params_and_side(node, !rhs)
-                .unwrap_or_else(|e| panic!("Failed to get params: {}", e))
-        });
+    pub fn build_subtree_from_application(&self, node: &ACDCZX, rhs: bool, params: &Vec<MatchedZXParam>) -> ACDCZX {
         let base = if rhs {
             self.lhs.clone()
         } else {
@@ -997,6 +993,7 @@ fn get_params_from_lemma(
                     name: val1.clone(),
                 }])
             } else if param_names.contains(val2) {
+                eprintln!("Matched {} to {}", val2, acdczx_to_pattern(lemma_zx).to_string());
                 Ok(vec![MatchedZXParam {
                     matched: l,
                     name: val2.clone(),
@@ -1014,8 +1011,22 @@ fn get_params_from_lemma(
         }
         (ACDCZX::Stack { a: a1, b: b1 }, ACDCZX::Stack { a: a2, b: b2 }) => {
             let mut ret = Vec::new();
+            eprintln!(
+                "Looking [STACK] for {:?} in Stack({}, {}) vs Stack({}, {})",
+                param_names,
+                acdczx_to_pattern(a1).to_string(),
+                acdczx_to_pattern(b1).to_string(),
+                acdczx_to_pattern(a2).to_string(),
+                acdczx_to_pattern(b2).to_string()
+            );
+            eprintln!("Stepping into {} >>>> {}", acdczx_to_pattern(a1), acdczx_to_pattern(a2));
+            eprintln!("Stepping into {} >>>> {}", acdczx_to_pattern(b1), acdczx_to_pattern(b2));
             let a_matches = get_params_from_lemma(a1, a2, params);
             let b_matches = get_params_from_lemma(b1, b2, params);
+            eprintln!(
+                "Stack step results: {:?} and {:?}",
+                a_matches, b_matches
+            );
             if a_matches.is_err() {
                 return a_matches;
             }
@@ -1027,9 +1038,21 @@ fn get_params_from_lemma(
             Ok(ret)
         }
         (ACDCZX::Compose { a: a1, b: b1 }, ACDCZX::Compose { a: a2, b: b2 }) => {
+            eprintln!(
+                "Looking [COMPOSE] for {:?} in compose({}, {}) vs compose({} ,{})",
+                param_names,
+                acdczx_to_pattern(a1).to_string(),
+                acdczx_to_pattern(b1).to_string(),
+                acdczx_to_pattern(a2).to_string(),
+                acdczx_to_pattern(b2).to_string()
+            );
             let mut ret = Vec::new();
             let a_matches = get_params_from_lemma(a1, a2, params);
             let b_matches = get_params_from_lemma(b1, b2, params);
+            eprintln!(
+                "Compose step results: {:?} and {:?}",
+                a_matches, b_matches
+            );
             if a_matches.is_err() {
                 return a_matches;
             }
@@ -1250,7 +1273,7 @@ where
             r_pattern.clone(),
             l_cond,
         )
-            .unwrap();
+        .unwrap();
         rws = vec![rw, rw_back];
     }
     let min_args = params.len() as u32;
@@ -1330,7 +1353,9 @@ where
         if prf.name == "nwire_removal_l" {
             eprintln!("Found nwire_removal_l, returning params");
         }
-        let fwd = lemma.get_params_and_side(candidate, prf.direction == Forward).map(|x| Some(x));
+        let fwd = lemma
+            .get_params_and_side(candidate, prf.direction == Forward)
+            .map(|x| Some(x));
         if fwd.is_ok() {
             return fwd;
         }
