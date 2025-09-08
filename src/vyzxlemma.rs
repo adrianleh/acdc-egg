@@ -869,7 +869,7 @@ where
         ret
     }
 
-    pub fn build_subtree_from_application(&self, node: &ACDCZX, rhs: bool, params: &Vec<MatchedZXParam>) -> ACDCZX {
+    pub fn build_subtree_from_application(&self, rhs: bool, params: &Vec<MatchedZXParam>) -> ACDCZX {
         let base = if rhs {
             self.lhs.clone()
         } else {
