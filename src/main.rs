@@ -2,6 +2,7 @@
 
 extern crate alloc;
 
+mod acdcfns;
 mod benchmark;
 mod conditioneqwrapper;
 mod conds;
@@ -15,6 +16,7 @@ mod subtrees;
 mod vyzxlemma;
 mod vyzxrules;
 
+use crate::acdcfns::FunctionContainer;
 use crate::benchmark::benchmark;
 use crate::serialize::{ACDCResult, Direction, SerFlatTermWrap};
 use crate::vyzxlemma::{
@@ -102,8 +104,14 @@ fn run_with_json(json: &str) {
     let mut rules = vyzx_rws();
     rules.extend(dim_rules());
     // println!("{:?}", vyzx_rules::<ConstantFolding>());
-    rules.extend(dep_rules());
-    run_with_problem(&zx, &rules, &LemmaContainer::new(vyzx_rules())).unwrap();
+    rules.extend(dep_rules(&FunctionContainer::new()));
+    run_with_problem(
+        &zx,
+        &rules,
+        &LemmaContainer::new(vyzx_rules()),
+        &FunctionContainer::new(),
+    )
+    .unwrap();
 }
 
 #[derive(Debug, Clone)]
@@ -168,6 +176,7 @@ fn run_with_problem(
     zx: &Lemma,
     rules: &Vec<Rewrite<ACDC, ConstantFolding>>,
     lemmas: &LemmaContainer<ConstantFolding>,
+    functions: &FunctionContainer,
 ) -> Result<String, String> {
     // let val_a = "(val n1 (* 1 m1) a)";
     // let val_b = "(val (+ 0 m1) o1 b)";
@@ -201,6 +210,7 @@ fn run_with_problem(
             Hyp::HypProp { .. } => {}
         }
     }
+    dim_hyp_rws.append(functions.get_all_rewrites().as_mut());
     let expr = acdczx_to_expl_pattern(&zx.prop.l).parse().unwrap();
     let goal = acdczx_to_expl_pattern(&zx.prop.r).parse().unwrap();
     eprintln!("Running problem : {} => {}", &expr, &goal);
@@ -234,25 +244,21 @@ fn run_with_problem(
         //     target_id,
         //     children_str
         // );
-        let re_node = node.build_recexpr(|id| runner.egraph.id_to_node(id).clone()).to_string();
+        let re_node = node
+            .build_recexpr(|id| runner.egraph.id_to_node(id).clone())
+            .to_string();
         let re_target = runner
             .egraph
             .id_to_node(target_id)
             .build_recexpr(|id| runner.egraph.id_to_node(id).clone())
             .to_string();
-        eprintln!(
-            "{}: {} -> {}",
-            i, re_node, re_target
-        );
+        eprintln!("{}: {} -> {}", i, re_node, re_target);
     }
 
     if runner.egraph.find(expr_id) != runner.egraph.find(res) {
         eprintln!("Failed to prove equality between {} and {}", expr_id, res);
         return Err("Failed to prove equality".to_string());
     }
-
-
-
 
     eprintln!("Explaining...");
     let start_expl_time = std::time::Instant::now();
@@ -327,30 +333,31 @@ where
         _: Option<&PatternAst<ACDC>>,
         _: Symbol,
     ) -> Vec<Id> {
-        let idx : usize = matched_id.into();
-        let recexpr = egraph
-            .nodes()[idx]
-            .build_recexpr(|id| egraph.id_to_node(id).clone());
+        let idx: usize = matched_id.into();
+        let recexpr = egraph.nodes()[idx].build_recexpr(|id| egraph.id_to_node(id).clone());
         if let Some((added, d)) = get_add_fold(egraph, matched_id) {
             let added_id = egraph.add(ACDC::Lit(added));
             let new_add = egraph.add(ACDC::Add([added_id, d]));
-            let new_add_idx :usize = new_add.into();
-            let new_add_recexpr = egraph
-                .nodes()[new_add_idx]
-                .build_recexpr(|id| egraph.id_to_node(id).clone());
-            eprintln!("Folded {} to {}", recexpr.to_string(), new_add_recexpr.to_string());
+            let new_add_idx: usize = new_add.into();
+            let new_add_recexpr =
+                egraph.nodes()[new_add_idx].build_recexpr(|id| egraph.id_to_node(id).clone());
+            eprintln!(
+                "Folded {} to {}",
+                recexpr.to_string(),
+                new_add_recexpr.to_string()
+            );
             egraph.union(matched_id, new_add);
             return vec![matched_id, new_add];
         }
         vec![]
     }
 }
-fn dep_rules<T>() -> Vec<Rewrite<ACDC, T>>
+fn dep_rules<T>(function_container: &FunctionContainer) -> Vec<Rewrite<ACDC, T>>
 where
     T: Analysis<ACDC>,
 {
     vec![
-        rewrite!("deps"; "?a"=> {ForceDepArgs{}}), // Forces a Dep1 and Dep2 for all ZX terms
+        rewrite!("deps"; "?a"=> {ForceDepArgs{function_container: Box::new(function_container.clone())}}), // Forces a Dep1 and Dep2 for all ZX terms
         rewrite!("dep-n-val"; "(dep1 (val ?a ?b ?c))" => "?a"),
         rewrite!("dep-m-val"; "(dep2 (val ?a ?b ?c))" => "?b"),
         rewrite!("dep-n-nwire"; "(dep1 (nwire ?a))" => "?a"),
@@ -369,6 +376,8 @@ where
         rewrite!("dep-m-nstack"; "(dep2 (nstack ?a ?b))" => "(* ?a (dep2 ?b))"),
         rewrite!("dep-n-nstack1"; "(dep1 (nstack1 ?a ?b))" => "?a"),
         rewrite!("dep-m-nstack1"; "(dep2 (nstack1 ?a ?b))" => "?a"),
+        rewrite!("dep-n-transpose"; "(dep1 (fn @ZXCore.transpose ?n ?m ?zx))" => "(dep2 ?zx)"),
+        rewrite!("dep-m-transpose"; "(dep2 (fn @ZXCore.transpose ?n ?m ?zx))" => "(dep1 ?zx)"),
     ]
 }
 // if {
@@ -406,8 +415,10 @@ fn simple_lit(lit: i32) -> ACDCDim {
     ACDCDim::Lit { lit }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ForceDepArgs {}
+#[derive(Debug, Clone)]
+struct ForceDepArgs {
+    function_container: Box<FunctionContainer>,
+}
 impl<T> Applier<ACDC, T> for ForceDepArgs
 where
     T: Analysis<ACDC>,
@@ -421,7 +432,7 @@ where
         _: Symbol,
     ) -> Vec<Id> {
         let node = egraph.id_to_node(matched_id);
-        if !is_zx_term(node, egraph) {
+        if !is_zx_term(node, self.function_container.as_ref()) {
             return vec![];
         }
         let d1 = egraph.add(ACDC::Dep1(matched_id));
@@ -457,28 +468,8 @@ define_language! {
     }
 }
 
-fn is_dim_term<T>(acdc: &ACDC, egraph: &EGraph<ACDC, T>) -> bool
-where
-    T: Analysis<ACDC>,
-{
-    match acdc {
-        ACDC::Lit(_) => true,
-        ACDC::Var(_) => true,
-        ACDC::Add(_) => true,
-        ACDC::Mul(_) => true,
-        ACDC::Sub(_) => true,
-        ACDC::Fn(_, ids) => ids
-            .iter()
-            .all(|id| is_dim_term(egraph.id_to_node(*id), egraph)),
-        _ => false,
-    }
-}
-
 #[inline]
-fn is_zx_term<T>(acdc: &ACDC, egraph: &EGraph<ACDC, T>) -> bool
-where
-    T: Analysis<ACDC>,
-{
+fn is_zx_term(acdc: &ACDC, function_container: &FunctionContainer) -> bool {
     match acdc {
         ACDC::Cast(_) => true,
         ACDC::Stack(_) => true,
@@ -489,9 +480,10 @@ where
         ACDC::NWire(_) => true,
         ACDC::NStack(_) => true,
         ACDC::NStack1(_) => true,
-        ACDC::Fn(_, ids) => ids
-            .iter()
-            .all(|id| is_zx_term(egraph.id_to_node(*id), egraph)),
+        ACDC::Fn(name, _) => function_container
+            .get_function(name.as_str())
+            .map(|f| f.is_zx())
+            .unwrap_or(false),
         _ => false,
     }
 }
@@ -546,7 +538,14 @@ impl Analysis<ACDC> for ConstantFolding {
             egraph.union_trusted(id, new_add, "simpl");
         }
         if let Some(i) = egraph[id].data {
-            eprintln!("Const folding {:?} to Lit({})", egraph.id_to_node(id).build_recexpr(|x| egraph.id_to_node(x).clone()).to_string(), i);
+            eprintln!(
+                "Const folding {:?} to Lit({})",
+                egraph
+                    .id_to_node(id)
+                    .build_recexpr(|x| egraph.id_to_node(x).clone())
+                    .to_string(),
+                i
+            );
             let added = egraph.add(ACDC::Lit(i));
             egraph.union_trusted(id, added, "simpl");
         }

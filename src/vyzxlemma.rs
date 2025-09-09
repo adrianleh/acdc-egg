@@ -78,7 +78,7 @@ pub fn to_expl_acdc_expr(dim: &ACDCDim) -> String {
         ACDCDim::Mul { a, b } => format!("(* {} {})", to_expl_acdc_expr(a), to_expl_acdc_expr(b)),
         ACDCDim::Sub { a, b } => format!("(- {} {})", to_expl_acdc_expr(a), to_expl_acdc_expr(b)),
         ACDCDim::Fn { fn_name, args } => format!(
-            "(Fn {} {})",
+            "({} {})",
             fn_name,
             args.iter()
                 .map(to_expl_acdc_expr)
@@ -105,7 +105,7 @@ pub fn to_acdc_expr(dim: &ACDCDim) -> String {
         ACDCDim::Mul { a, b } => format!("(* {} {})", to_acdc_expr(a), to_acdc_expr(b)),
         ACDCDim::Sub { a, b } => format!("(- {} {})", to_acdc_expr(a), to_acdc_expr(b)),
         ACDCDim::Fn { fn_name, args } => format!(
-            "(Fn {} {})",
+            "({} {})",
             fn_name,
             args.iter()
                 .map(to_acdc_expr)
@@ -121,7 +121,7 @@ pub fn to_acdc_expr(dim: &ACDCDim) -> String {
     }
 }
 
-fn replace_dim_subtree(dim: &ACDCDim, replace: &ACDCDim, with: &ACDCDim) -> ACDCDim {
+pub fn replace_dim_subtree(dim: &ACDCDim, replace: &ACDCDim, with: &ACDCDim) -> ACDCDim {
     if dim == replace {
         return with.clone();
     }
@@ -164,7 +164,7 @@ fn replace_dim_subtree(dim: &ACDCDim, replace: &ACDCDim, with: &ACDCDim) -> ACDC
     }
 }
 
-fn replace_dims_in_zx(zx: &ACDCZX, replace: &ACDCDim, with: &ACDCDim) -> ACDCZX {
+pub fn replace_dims_in_zx(zx: &ACDCZX, replace: &ACDCDim, with: &ACDCDim) -> ACDCZX {
     match zx {
         ACDCZX::Cast { n, m, zx } => {
             let n = replace_dim_subtree(n, replace, with);
@@ -625,7 +625,7 @@ pub fn acdczx_to_pattern(zx: &ACDCZX) -> String {
             to_acdc_expr(a)
         ),
         ACDCZX::Fn { fn_name, args } => format!(
-            "(fn {} {})",
+            "({} {})",
             fn_name,
             args.iter()
                 .map(zx_or_dim_pattern)
@@ -696,7 +696,7 @@ pub fn acdczx_to_expl_pattern(zx: &ACDCZX) -> String {
             to_expl_acdc_expr(a)
         ),
         ACDCZX::Fn { fn_name, args } => format!(
-            "(fn {} {})",
+            "({} {})",
             fn_name,
             args.iter()
                 .map(zx_or_dim_expl_pattern)

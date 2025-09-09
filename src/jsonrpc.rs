@@ -9,6 +9,7 @@ use std::io::Write;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 use tokio::io::{self, AsyncBufReadExt, AsyncReadExt, stdin};
+use crate::acdcfns::FunctionContainer;
 
 #[cfg(windows)]
 const LINE_ENDING: &'static str = "\r\n";
@@ -18,6 +19,7 @@ const LINE_ENDING: &'static str = "\n";
 struct SharedState {
     rules: Vec<Rewrite<ACDC, ConstantFolding>>,
     lemma_container: Box<LemmaContainer<ConstantFolding>>,
+    functions: Box<FunctionContainer>,
 }
 
 impl SharedState {
@@ -25,6 +27,7 @@ impl SharedState {
         SharedState {
             rules: vec![],
             lemma_container: Box::new(LemmaContainer::new(vec![])),
+            functions: Box::new(FunctionContainer::new()),
         }
     }
 
@@ -65,6 +68,16 @@ impl SharedState {
         self.rules = vyzx_rws();
         self.rules.len() as i64
     }
+    
+    fn add_function(&mut self, f: crate::acdcfns::Function) -> i64 {
+        self.functions.deref_mut().add_function(f);
+        self.functions.len() as i64
+    }
+    
+    fn clear_functions(&mut self) -> i64 {
+        self.functions.deref_mut().clear();
+        self.functions.len() as i64
+    }
 }
 
 #[derive(Deserialize)]
@@ -88,6 +101,15 @@ async fn add(
         return Ok(res.unwrap());
     }
     Err(Error::internal(res.err().unwrap()))
+}
+
+async fn add_function(
+    data: Data<Arc<Mutex<SharedState>>>,
+    Params(params): Params<crate::acdcfns::Function>,
+) -> Result<i64, Error> {
+    let mut state = data.lock().unwrap();
+    let res = state.add_function(params);
+    Ok(res)
 }
 
 // async fn add(
@@ -124,8 +146,8 @@ async fn run(
     let state = data.lock().unwrap();
     let mut rules = state.rules.clone();
     rules.extend(dim_rules());
-    rules.extend(dep_rules());
-    let result = run_with_problem(&params.0, &rules, state.lemma_container.deref());
+    rules.extend(dep_rules(state.functions.deref()));
+    let result = run_with_problem(&params.0, &rules, state.lemma_container.deref(), state.functions.deref());
     if result.is_err() {
         return Err(Error::internal(result.err().unwrap()));
     }
@@ -148,6 +170,7 @@ pub async fn tokio_main(http: bool, port: Option<u16>) {
     let rpc = Server::new()
         .with_data(data)
         .with_method("add_lemmas", add)
+        .with_method("add_function", add_function)
         .with_method("default_lemmas", default_lemmas)
         .with_method("clear_lemmas", clear)
         .with_method("ping", ping)
